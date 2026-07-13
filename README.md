@@ -72,6 +72,7 @@ cargo run -p s4-cli -- query --expr all
 - [Plugin System](docs/plugins/PLUGIN_SYSTEM.md)
 - [Parser Framework (Tree-sitter)](docs/parser/PARSER_FRAMEWORK.md)
 - [Software Knowledge Graph](docs/knowledge/SOFTWARE_KNOWLEDGE_GRAPH.md)
+- [Requirements Graph](docs/requirements/REQUIREMENTS_GRAPH.md)
 - [ADR Index](docs/adr/README.md)
 - Per-crate README: `crates/<name>/README.md`
 
