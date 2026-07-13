@@ -16,5 +16,9 @@ pub struct Subscription {
 #[async_trait]
 pub trait EventHandler: Send + Sync {
     /// Process a single event.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if event handling fails.
     async fn handle(&self, event: &Event) -> Result<()>;
 }

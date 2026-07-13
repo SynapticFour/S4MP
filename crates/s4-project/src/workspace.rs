@@ -20,5 +20,9 @@ pub trait Workspace: Send + Sync {
     fn current_snapshot(&self) -> Option<&SnapshotRef>;
 
     /// Persist configuration changes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if configuration cannot be saved.
     fn save_config(&mut self) -> Result<()>;
 }

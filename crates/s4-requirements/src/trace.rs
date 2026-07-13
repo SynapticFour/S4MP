@@ -32,5 +32,9 @@ pub trait TraceabilityGraph: Send + Sync {
     fn requirements(&self) -> Box<dyn Iterator<Item = RequirementId> + '_>;
 
     /// Trace links originating from a requirement.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if trace lookup fails.
     fn traces_from(&self, requirement: RequirementId) -> Result<Vec<TraceLink>>;
 }

@@ -32,11 +32,23 @@ pub enum PatternKind {
 /// Extracts architectural structure from a graph view.
 pub trait ArchitectureAnalyzer: Send + Sync {
     /// Detect boundaries in the graph.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if extraction fails.
     fn extract_boundaries(&self, view: &dyn GraphView) -> Result<Vec<Boundary>>;
 
     /// Detect patterns and anti-patterns.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if extraction fails.
     fn extract_patterns(&self, view: &dyn GraphView) -> Result<Vec<Pattern>>;
 
     /// Emit findings for architectural violations.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if analysis fails.
     fn findings(&self, view: &dyn GraphView) -> Result<Vec<Finding>>;
 }

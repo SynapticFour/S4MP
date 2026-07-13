@@ -6,7 +6,7 @@ use clap::{Parser, Subcommand};
 use commands::{analyze, certify, init, query, verify};
 use s4_core::Result;
 
-/// SynapticFour Method Platform CLI.
+/// `SynapticFour` Method Platform CLI.
 #[derive(Parser)]
 #[command(name = "s4", version, about = "SynapticFour Method Platform")]
 struct Cli {
@@ -48,6 +48,11 @@ fn main() {
     }
 }
 
+/// Dispatch CLI subcommands.
+///
+/// # Errors
+///
+/// Returns an error if a subcommand fails.
 fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Commands::Init { path } => init::run(&path),

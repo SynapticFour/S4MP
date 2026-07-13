@@ -2,6 +2,10 @@
 
 Formal ADRs referenced from [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) will be recorded here as decisions are finalized.
 
+**Template:** [0000-template.md](./0000-template.md)  
+**Process:** [Engineering Standards §11](../engineering/ENGINEERING_STANDARDS.md#11-architecture-decision-records-adrs)  
+**Cross-cutting proposals:** [RFC process](../rfc/README.md)
+
 ## Index
 
 | ADR | Title | Status |

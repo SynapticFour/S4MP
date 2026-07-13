@@ -50,9 +50,19 @@ pub struct PluginId(pub String);
 pub struct ProjectId(pub String);
 
 fn hex_short(bytes: &[u8; 32]) -> String {
-    bytes[..8].iter().map(|b| format!("{b:02x}")).collect()
+    let mut s = String::with_capacity(16);
+    for b in &bytes[..8] {
+        use std::fmt::Write as _;
+        let _ = write!(s, "{b:02x}");
+    }
+    s
 }
 
 fn hex_full(bytes: &[u8; 32]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
+    let mut s = String::with_capacity(64);
+    for b in bytes {
+        use std::fmt::Write as _;
+        let _ = write!(s, "{b:02x}");
+    }
+    s
 }

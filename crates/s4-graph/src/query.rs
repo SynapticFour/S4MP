@@ -11,6 +11,10 @@ pub struct QueryResult {
 /// Graph query interface (S4QL foundation).
 pub trait GraphQuery: Send + Sync {
     /// Execute a query expression against a graph view.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the query is invalid or execution fails.
     fn execute(&self, view: &dyn GraphView, expression: &str) -> Result<QueryResult>;
 }
 

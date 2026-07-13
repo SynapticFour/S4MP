@@ -24,7 +24,7 @@ pub mod verifier;
 pub use analyzer::Analyzer;
 pub use host::PluginHost;
 pub use importer::Importer;
-pub use manifest::{CapabilitySet, PluginManifest};
+pub use manifest::{CapabilitySet, PluginCapability, PluginManifest};
 pub use parser::Parser;
 pub use plugin::{InvocationContext, Plugin, PluginOutput};
 pub use reasoner::Reasoner;

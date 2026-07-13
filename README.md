@@ -66,6 +66,8 @@ cargo run -p s4-cli -- query --expr all
 
 ## Documentation
 
+- [Engineering Standards](docs/engineering/ENGINEERING_STANDARDS.md) — **mandatory before implementation**
+- [Contributing](CONTRIBUTING.md)
 - [Architecture Specification](docs/architecture/ARCHITECTURE.md)
 - [Canonical Data Model](docs/model/CANONICAL_MODEL.md)
 - [Universal Code Graph](docs/graph/UNIVERSAL_CODE_GRAPH.md)
@@ -79,6 +81,7 @@ cargo run -p s4-cli -- query --expr all
 
 ## Design Rules
 
+0. **Follow [Engineering Standards](docs/engineering/ENGINEERING_STANDARDS.md)** — all implementation must comply.
 1. **No business logic in this skeleton** — traits, types, and module boundaries only.
 2. **No LLM provider dependencies** — `s4-llm` defines interfaces; providers are plugins.
 3. **All cross-boundary I/O is artifact-ID based** — via `s4-storage`.

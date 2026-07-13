@@ -9,5 +9,9 @@ pub trait LlmProvider: Send + Sync {
     fn provider_id(&self) -> &str;
 
     /// Execute a reasoning request and return a proposal artifact.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the request fails.
     async fn reason(&self, request: ReasonRequest) -> Result<Proposal>;
 }

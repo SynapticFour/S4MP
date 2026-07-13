@@ -11,7 +11,7 @@ Defines plugin manifests, capability declarations, and specialized plugin traits
 | Module | Purpose |
 |--------|---------|
 | `plugin` | Base `Plugin` trait, `InvocationContext` |
-| `manifest` | `PluginManifest`, `CapabilitySet` |
+| `manifest` | `PluginManifest`, `CapabilitySet`, `PluginCapability` |
 | `importer` | `Importer` trait |
 | `parser` | `Parser` trait |
 | `analyzer` | `Analyzer` trait |

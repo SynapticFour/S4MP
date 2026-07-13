@@ -15,21 +15,29 @@ pub struct PluginManifest {
     pub description: Option<String>,
 }
 
+/// Role a plugin may declare.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PluginCapability {
+    /// Provides repository import.
+    Importer,
+    /// Provides source parsing.
+    Parser,
+    /// Provides IR linking.
+    Linker,
+    /// Provides analysis.
+    Analyzer,
+    /// Provides LLM reasoning (provider-specific impl).
+    Reasoner,
+    /// Provides verification rules.
+    Verifier,
+}
+
 /// Capability flags and metadata declared by a plugin.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct CapabilitySet {
-    /// Provides repository import.
-    pub importer: bool,
-    /// Provides source parsing.
-    pub parser: bool,
-    /// Provides IR linking.
-    pub linker: bool,
-    /// Provides analysis.
-    pub analyzer: bool,
-    /// Provides LLM reasoning (provider-specific impl).
-    pub reasoner: bool,
-    /// Provides verification rules.
-    pub verifier: bool,
+    /// Enabled plugin roles.
+    pub roles: Vec<PluginCapability>,
     /// Supported language identifiers.
     pub languages: Vec<String>,
     /// Glob file patterns handled by parser.

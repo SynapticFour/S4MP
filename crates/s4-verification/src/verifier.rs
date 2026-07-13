@@ -19,5 +19,9 @@ pub struct VerificationResult {
 /// Verifies facts and graph state against invariants.
 pub trait Verifier: Send + Sync {
     /// Run verification against the given invariant set.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if verification cannot complete.
     fn verify(&self, invariants: &InvariantSet, facts: &[Fact]) -> Result<VerificationResult>;
 }

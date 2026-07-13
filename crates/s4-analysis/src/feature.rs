@@ -19,5 +19,9 @@ pub struct Feature {
 /// Extracts features from graph and knowledge inputs.
 pub trait FeatureExtractor: Send + Sync {
     /// Extract features from a graph view.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if extraction fails.
     fn extract(&self, view: &dyn GraphView) -> Result<Vec<Feature>>;
 }

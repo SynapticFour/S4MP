@@ -19,11 +19,23 @@ pub trait GraphView: Send + Sync {
 /// Mutable graph builder (implementation-provided).
 pub trait GraphBuilder: Send + Sync {
     /// Add a node to the graph under construction.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the node cannot be added.
     fn add_node(&mut self, node: Node) -> Result<()>;
 
     /// Add an edge to the graph under construction.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the edge cannot be added.
     fn add_edge(&mut self, edge: Edge) -> Result<()>;
 
     /// Finalize into a read-only view.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the graph is invalid.
     fn build(self: Box<Self>) -> Result<Box<dyn GraphView>>;
 }

@@ -1,6 +1,6 @@
 //! # s4-core
 //!
-//! Foundation types for the SynapticFour Method Platform (S4MP).
+//! Foundation types for the `SynapticFour` Method Platform (S4MP).
 //!
 //! This crate is the innermost layer of the workspace. It defines identifiers,
 //! errors, and versioning contracts used by every other crate. It must not
