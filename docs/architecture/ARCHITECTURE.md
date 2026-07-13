@@ -18,6 +18,7 @@ S4MP is a **knowledge platform for software systems**. It ingests repositories, 
 | Language | **Language-agnostic core**; language specifics live in plugins |
 | Storage | **Content-addressed immutable artifacts** (Git-like) |
 | IR | **Universal Semantic IR (USIR)** as the stable interchange layer |
+| Shape | **LLVM-style infrastructure** — frontends + IR + composable passes ([ADR-013](../adr/0013-llvm-infrastructure-not-sonarqube.md)) |
 | Evolution | **Schema-versioned** everything; breaking changes are explicit migrations |
 
 ---
@@ -208,7 +209,75 @@ All inter-crate and inter-plugin communication crosses the store.
 
 ---
 
-## 9. Data Flow
+## 9. Processing Pipeline (LLVM Model)
+
+S4MP is built as **infrastructure** (like LLVM), not as a **rule collection** (like SonarQube). See [ADR-013](../adr/0013-llvm-infrastructure-not-sonarqube.md).
+
+| Model | Role | S4MP equivalent |
+|-------|------|-----------------|
+| **LLVM** | Frontends → IR → passes → backends | Parsers → USIR → pass plugins → graphs + certificates |
+| **SonarQube** | Rules applied directly to source | **Anti-pattern** — rules belong in plugins, not core |
+
+### 9.1 Canonical Pipeline
+
+```
+                         ┌── SOW · OpenAPI · ReqIF ──┐
+                         │   (contractual intent)     │
+                         ▼                            │
+Repository               Requirements Importer         │
+    │                         │                       │
+    ▼                         ▼                       │
+Language Frontends      Requirements Graph ◄──────────┘
+(Tree-sitter Parsers)        (parallel branch)
+    │
+    ▼
+Universal Semantic IR (USIR)          ← stable core (LLVM IR)
+    │
+    ├──► Universal Code Graph (UCG)
+    └──► Software Knowledge Graph (SKG)
+              │
+              ▼
+        Analysis Passes          (metrics, architecture, features)
+              │
+              ▼
+        Planning Passes          (refactor plans — proposed only)
+              │
+              ▼
+        Transformation Passes    (apply approved changes → new snapshot)
+              │
+              ▼
+        Verification Passes      (version compare, invariants, trace completeness)
+              │
+              ▼
+        Certification            (policy over verification artifacts)
+```
+
+All stages read and write **immutable CAS artifacts**. Passes never mutate prior artifacts.
+
+### 9.2 Pass Types
+
+| Pass kind | Consumes | Produces | Crate / plugin role |
+|-----------|----------|----------|---------------------|
+| **Frontend** | Source files | CST, UAST, USIR | Parser plugins (`s4-parser`) |
+| **Linker** | Per-module USIR | Unified USIR, symbol table | Linker plugin |
+| **Materializer** | USIR | UCG, SKG snapshots | `s4-graph`, `s4-knowledge` |
+| **Requirements** | SOW, OpenAPI | Requirements snapshot | `s4-requirements` plugins |
+| **Analysis** | Graph snapshots | Findings, metrics | Analyzer plugins (`s4-analysis`, `s4-metrics`) |
+| **Planning** | Findings, graphs | Transformation proposals | `s4-planner`, reasoner plugins |
+| **Transformation** | Approved plan | New code snapshot | Transform plugins |
+| **Verification** | Baseline + candidate triples | `VerificationRun` + confidence | Verifier plugins (`s4-verification`) |
+| **Certification** | Verification runs | Certificate | `s4-certification` |
+
+Future orchestration will expose a **`Pass` trait** and pass manager (invalidation via artifact DAG). Until then, this ordering is the **normative processing model**.
+
+### 9.3 What Core Must Not Do
+
+- Ship a fixed catalog of lint/security rules (pass plugins do).
+- Parse language syntax without USIR lowering.
+- Apply refactors or LLM suggestions without verification and explicit approval (ADR-011).
+- Merge Requirements into USIR — intent and code remain separate graphs linked by trace edges.
+
+### 9.4 Incremental Data Flow (Artifact Detail)
 
 ```
 Repository URL
@@ -223,14 +292,17 @@ Repository URL
 [Linker Plugin] ──► Unified USIR + Symbol Table
     │
     ▼
-[Graph Materializer] ──► Semantic + Structural Graph
+[Graph Materializer] ──► UCG + SKG Snapshots
     │
-    ├──► [Analyzer Plugins] ──► Architectural / Feature / Quality
-    ├──► [Requirements Plugins] ──► Requirements Graph
-    ├──► [Query Engine] ──► Result Sets
-    ├──► [Reasoner Plugins] ──► Proposal Artifacts
-    └──► [Verifier Plugins] ──► Accepted Facts + Certificates
+    ├──► [Requirements Plugins] ──► Requirements Snapshot (from SOW/API — not from USIR)
+    ├──► [Analysis Passes] ──► Findings, Metrics
+    ├──► [Planning Passes] ──► Transformation Proposals
+    ├──► [Reasoner Plugins] ──► Proposal Artifacts (lifecycle: proposed)
+    ├──► [Verification Passes] ──► VerificationRun Artifacts
+    └──► [Certification] ──► Certificate Artifacts
 ```
+
+Cross-graph queries (e.g. requirement → concept → symbol → test) span snapshots via trace edges; see [Requirements Graph](../requirements/REQUIREMENTS_GRAPH.md) and [Verification Engine](../verification/VERIFICATION_ENGINE.md).
 
 ---
 
@@ -266,6 +338,7 @@ Enforced by `deny.toml` and code review.
 | ADR-010 | Query engine independent of AI | AI is optional accelerator |
 | ADR-011 | No auto-apply refactors in core | Safety, trust, certification |
 | ADR-012 | Blake3 for artifact IDs | Speed; intentionally not Git SHA-1 |
+| ADR-013 | LLVM infrastructure, not SonarQube | Composable passes; USIR as stable core; rules in plugins |
 
 ---
 

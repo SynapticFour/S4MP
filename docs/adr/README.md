@@ -17,6 +17,7 @@ Formal ADRs referenced from [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) w
 | ADR-005 | LLM outputs always proposed | Accepted |
 | ADR-008 | Rust for core platform | Accepted |
 | ADR-012 | Blake3 for artifact IDs | Accepted |
+| ADR-013 | LLVM infrastructure, not SonarQube rule engine | Accepted |
 
 ## Open
 
