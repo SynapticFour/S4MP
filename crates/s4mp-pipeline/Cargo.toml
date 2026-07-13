@@ -1,0 +1,21 @@
+[package]
+name = "s4mp-pipeline"
+description = "Declarative pipeline orchestration for S4MP"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+s4mp-analyze = { workspace = true }
+s4mp-core = { workspace = true }
+s4mp-import = { workspace = true }
+s4mp-jobs = { workspace = true }
+s4mp-link = { workspace = true }
+s4mp-parse = { workspace = true }
+s4mp-plugin-host = { workspace = true }
+s4mp-reason = { workspace = true }
+s4mp-store = { workspace = true }
+s4mp-verify = { workspace = true }
+s4mp-workspace = { workspace = true }

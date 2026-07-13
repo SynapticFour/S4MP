@@ -1,0 +1,76 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/s4mp-core",
+    "crates/s4mp-schema",
+    "crates/s4mp-store",
+    "crates/s4mp-ir",
+    "crates/s4mp-model",
+    "crates/s4mp-graph",
+    "crates/s4mp-query",
+    "crates/s4mp-plugin-api",
+    "crates/s4mp-plugin-sdk",
+    "crates/s4mp-plugin-host",
+    "crates/s4mp-plugin-registry",
+    "crates/s4mp-import",
+    "crates/s4mp-parse",
+    "crates/s4mp-link",
+    "crates/s4mp-analyze",
+    "crates/s4mp-reason",
+    "crates/s4mp-verify",
+    "crates/s4mp-pipeline",
+    "crates/s4mp-workspace",
+    "crates/s4mp-jobs",
+    "crates/s4mp-cli",
+    "crates/s4mp-api",
+    "crates/s4mp-client",
+    "crates/s4mp-xtask",
+    "crates/s4mp-bench",
+    "crates/s4mp-conformance",
+    "crates/s4mp-arch-test",
+    "plugins/importers/git",
+    "plugins/parsers/rust",
+]
+exclude = []
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/SynapticFour/S4MP"
+rust-version = "1.75"
+
+[workspace.dependencies]
+# Internal crates
+s4mp-core = { path = "crates/s4mp-core" }
+s4mp-schema = { path = "crates/s4mp-schema" }
+s4mp-store = { path = "crates/s4mp-store" }
+s4mp-ir = { path = "crates/s4mp-ir" }
+s4mp-model = { path = "crates/s4mp-model" }
+s4mp-graph = { path = "crates/s4mp-graph" }
+s4mp-query = { path = "crates/s4mp-query" }
+s4mp-plugin-api = { path = "crates/s4mp-plugin-api" }
+s4mp-plugin-sdk = { path = "crates/s4mp-plugin-sdk" }
+s4mp-plugin-host = { path = "crates/s4mp-plugin-host" }
+s4mp-plugin-registry = { path = "crates/s4mp-plugin-registry" }
+s4mp-import = { path = "crates/s4mp-import" }
+s4mp-parse = { path = "crates/s4mp-parse" }
+s4mp-link = { path = "crates/s4mp-link" }
+s4mp-analyze = { path = "crates/s4mp-analyze" }
+s4mp-reason = { path = "crates/s4mp-reason" }
+s4mp-verify = { path = "crates/s4mp-verify" }
+s4mp-pipeline = { path = "crates/s4mp-pipeline" }
+s4mp-workspace = { path = "crates/s4mp-workspace" }
+s4mp-jobs = { path = "crates/s4mp-jobs" }
+
+# External
+blake3 = "1.5"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tracing = "0.1"
+clap = { version = "4", features = ["derive"] }
+
+[profile.release]
+lto = true
+codegen-units = 1

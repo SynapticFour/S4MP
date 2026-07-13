@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://s4mp.dev/schemas/artifact.schema.json",
+  "title": "S4MP Artifact",
+  "description": "Canonical envelope for content-addressed S4MP artifacts",
+  "type": "object",
+  "required": ["kind", "schema_version", "payload"],
+  "properties": {
+    "kind": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "physical_snapshot",
+            "syntax_tree",
+            "usir_module",
+            "graph_projection",
+            "analysis_finding",
+            "reason_proposal",
+            "certificate"
+          ]
+        },
+        {
+          "type": "object",
+          "required": ["extension"],
+          "properties": {
+            "extension": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "schema_version": {
+      "type": "object",
+      "required": ["major", "minor"],
+      "properties": {
+        "major": { "type": "integer", "minimum": 0 },
+        "minor": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "payload": {}
+  }
+}

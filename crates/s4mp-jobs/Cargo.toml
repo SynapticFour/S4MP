@@ -1,0 +1,12 @@
+[package]
+name = "s4mp-jobs"
+description = "Job queue abstraction for S4MP"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+s4mp-core = { workspace = true }
+s4mp-schema = { workspace = true }
