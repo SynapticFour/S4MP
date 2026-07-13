@@ -69,6 +69,7 @@ cargo run -p s4-cli -- query --expr all
 - [Architecture Specification](docs/architecture/ARCHITECTURE.md)
 - [Canonical Data Model](docs/model/CANONICAL_MODEL.md)
 - [Universal Code Graph](docs/graph/UNIVERSAL_CODE_GRAPH.md)
+- [Plugin System](docs/plugins/PLUGIN_SYSTEM.md)
 - [ADR Index](docs/adr/README.md)
 - Per-crate README: `crates/<name>/README.md`
 
