@@ -1,35 +1,24 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/s4mp-core",
-    "crates/s4mp-schema",
-    "crates/s4mp-store",
-    "crates/s4mp-ir",
-    "crates/s4mp-model",
-    "crates/s4mp-graph",
-    "crates/s4mp-query",
-    "crates/s4mp-plugin-api",
-    "crates/s4mp-plugin-sdk",
-    "crates/s4mp-plugin-host",
-    "crates/s4mp-plugin-registry",
-    "crates/s4mp-import",
-    "crates/s4mp-parse",
-    "crates/s4mp-link",
-    "crates/s4mp-analyze",
-    "crates/s4mp-reason",
-    "crates/s4mp-verify",
-    "crates/s4mp-pipeline",
-    "crates/s4mp-workspace",
-    "crates/s4mp-jobs",
-    "crates/s4mp-cli",
-    "crates/s4mp-api",
-    "crates/s4mp-client",
-    "crates/s4mp-xtask",
-    "crates/s4mp-bench",
-    "crates/s4mp-conformance",
-    "crates/s4mp-arch-test",
-    "plugins/importers/git",
-    "plugins/parsers/rust",
+    "crates/s4-core",
+    "crates/s4-storage",
+    "crates/s4-events",
+    "crates/s4-plugin",
+    "crates/s4-project",
+    "crates/s4-parser",
+    "crates/s4-graph",
+    "crates/s4-knowledge",
+    "crates/s4-requirements",
+    "crates/s4-metrics",
+    "crates/s4-analysis",
+    "crates/s4-planner",
+    "crates/s4-verification",
+    "crates/s4-certification",
+    "crates/s4-llm",
+    "crates/s4-api",
+    "crates/s4-cli",
+    "crates/s4-ui",
 ]
 exclude = []
 
@@ -39,29 +28,27 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/SynapticFour/S4MP"
 rust-version = "1.75"
+authors = ["SynapticFour"]
 
 [workspace.dependencies]
-# Internal crates
-s4mp-core = { path = "crates/s4mp-core" }
-s4mp-schema = { path = "crates/s4mp-schema" }
-s4mp-store = { path = "crates/s4mp-store" }
-s4mp-ir = { path = "crates/s4mp-ir" }
-s4mp-model = { path = "crates/s4mp-model" }
-s4mp-graph = { path = "crates/s4mp-graph" }
-s4mp-query = { path = "crates/s4mp-query" }
-s4mp-plugin-api = { path = "crates/s4mp-plugin-api" }
-s4mp-plugin-sdk = { path = "crates/s4mp-plugin-sdk" }
-s4mp-plugin-host = { path = "crates/s4mp-plugin-host" }
-s4mp-plugin-registry = { path = "crates/s4mp-plugin-registry" }
-s4mp-import = { path = "crates/s4mp-import" }
-s4mp-parse = { path = "crates/s4mp-parse" }
-s4mp-link = { path = "crates/s4mp-link" }
-s4mp-analyze = { path = "crates/s4mp-analyze" }
-s4mp-reason = { path = "crates/s4mp-reason" }
-s4mp-verify = { path = "crates/s4mp-verify" }
-s4mp-pipeline = { path = "crates/s4mp-pipeline" }
-s4mp-workspace = { path = "crates/s4mp-workspace" }
-s4mp-jobs = { path = "crates/s4mp-jobs" }
+# Internal — dependency direction: outer crates depend on inner only.
+s4-core = { path = "crates/s4-core" }
+s4-storage = { path = "crates/s4-storage" }
+s4-events = { path = "crates/s4-events" }
+s4-plugin = { path = "crates/s4-plugin" }
+s4-project = { path = "crates/s4-project" }
+s4-parser = { path = "crates/s4-parser" }
+s4-graph = { path = "crates/s4-graph" }
+s4-knowledge = { path = "crates/s4-knowledge" }
+s4-requirements = { path = "crates/s4-requirements" }
+s4-metrics = { path = "crates/s4-metrics" }
+s4-analysis = { path = "crates/s4-analysis" }
+s4-planner = { path = "crates/s4-planner" }
+s4-verification = { path = "crates/s4-verification" }
+s4-certification = { path = "crates/s4-certification" }
+s4-llm = { path = "crates/s4-llm" }
+s4-api = { path = "crates/s4-api" }
+s4-ui = { path = "crates/s4-ui" }
 
 # External
 blake3 = "1.5"
@@ -70,7 +57,23 @@ serde_json = "1"
 thiserror = "2"
 tracing = "0.1"
 clap = { version = "4", features = ["derive"] }
+async-trait = "0.1"
 
 [profile.release]
 lto = true
 codegen-units = 1
+strip = true
+
+[profile.dev]
+debug = true
+
+[profile.test]
+debug = true
+
+[workspace.lints.rust]
+missing_docs = "warn"
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }

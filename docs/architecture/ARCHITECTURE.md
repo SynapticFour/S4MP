@@ -120,67 +120,50 @@ All inter-crate and inter-plugin communication crosses the store.
 
 ## 6. Crate Map
 
+> **Implementation:** see `crates/s4-*` in the workspace. Each crate has a README and trait-only public API.
+
 ### Tier 0 — Foundation
 
 | Crate | Responsibility |
 |-------|----------------|
-| `s4mp-core` | IDs, errors, time, semver, capability flags |
-| `s4mp-schema` | Canonical type definitions, extension registry |
-| `s4mp-store` | CAS read/write, manifest chains, ref labels |
+| `s4-core` | IDs, errors, schema/API versioning, prelude |
 
-### Tier 1 — Knowledge
+### Tier 1 — Infrastructure
 
 | Crate | Responsibility |
 |-------|----------------|
-| `s4mp-ir` | USIR construction, validation, normalization |
-| `s4mp-model` | Domain model: nodes, edges, facts, provenance |
-| `s4mp-graph` | Graph views, indexes, layer projections |
-| `s4mp-query` | Query AST, planner, executors |
+| `s4-storage` | CAS artifact and manifest contracts |
+| `s4-events` | Event bus and pub/sub contracts |
+| `s4-plugin` | Plugin manifests and specialized plugin traits |
+| `s4-project` | Workspace, config, lockfile, snapshot refs |
+| `s4-graph` | Code graph nodes, edges, layers, queries |
 
-### Tier 2 — Plugin System
-
-| Crate | Responsibility |
-|-------|----------------|
-| `s4mp-plugin-api` | Stable plugin trait definitions + ABI version |
-| `s4mp-plugin-sdk` | Helpers for plugin authors |
-| `s4mp-plugin-host` | Load, sandbox, lifecycle, invoke |
-| `s4mp-plugin-registry` | Discovery, manifest validation, semver resolution |
-
-### Tier 3 — Capabilities
+### Tier 2 — Knowledge & Capabilities
 
 | Crate | Responsibility |
 |-------|----------------|
-| `s4mp-import` | Orchestrate importers → physical snapshot artifacts |
-| `s4mp-parse` | Orchestrate parsers + incremental re-parse |
-| `s4mp-link` | Merge per-file/per-lang IR → unified semantic graph |
-| `s4mp-analyze` | Analyzer framework |
-| `s4mp-reason` | LLM-agnostic reasoning contracts (interfaces only) |
-| `s4mp-verify` | Invariants, certification, acceptance workflows |
+| `s4-parser` | USIR types and parse pipeline contracts |
+| `s4-knowledge` | Facts, provenance, ontology, materializer |
+| `s4-requirements` | Requirements graph and traceability |
+| `s4-metrics` | Complexity and software metrics |
+| `s4-analysis` | Architecture and feature extraction |
+| `s4-llm` | LLM-agnostic reasoning (interfaces only) |
 
-### Tier 4 — Orchestration
-
-| Crate | Responsibility |
-|-------|----------------|
-| `s4mp-pipeline` | Declarative DAG execution, incremental invalidation |
-| `s4mp-workspace` | Project config, plugin resolution, snapshot refs |
-| `s4mp-jobs` | Async job queue abstraction |
-
-### Tier 5 — Surfaces
+### Tier 3 — Quality & Planning
 
 | Crate | Responsibility |
 |-------|----------------|
-| `s4mp-cli` | `s4mp` command-line tool |
-| `s4mp-api` | HTTP/gRPC service |
-| `s4mp-client` | Rust client library |
+| `s4-planner` | Refactoring plan contracts |
+| `s4-verification` | Invariants, verifiers, acceptance workflows |
+| `s4-certification` | Certificates, policies, issuer trait |
 
-### Meta
+### Tier 4 — Surfaces
 
 | Crate | Responsibility |
 |-------|----------------|
-| `s4mp-xtask` | Build, codegen, plugin packaging, migrations |
-| `s4mp-bench` | Performance benchmarks |
-| `s4mp-conformance` | Conformance tests for plugins |
-| `s4mp-arch-test` | Dependency direction enforcement |
+| `s4-cli` | `s4` command-line interface |
+| `s4-api` | HTTP/gRPC API contracts |
+| `s4-ui` | Headless UI bridge for IDE/web frontends |
 
 ---
 
@@ -188,13 +171,13 @@ All inter-crate and inter-plugin communication crosses the store.
 
 | Domain | Owns |
 |--------|------|
-| Platform Core | `s4mp-core`, `s4mp-schema`, `s4mp-store`, `s4mp-pipeline`, `s4mp-workspace` |
-| Knowledge Graph | `s4mp-model`, `s4mp-graph`, `s4mp-query`, `s4mp-ir` |
-| Plugin Infrastructure | `s4mp-plugin-*`, conformance suite |
-| Language Ecosystem | Parser/linker plugins (RFC for core schema) |
-| Analysis & Quality | `s4mp-analyze`, `s4mp-verify`, analyzer plugins |
-| Intelligence (Interfaces) | `s4mp-reason` contracts only |
-| Developer Experience | `s4mp-cli`, `s4mp-api`, `s4mp-client` |
+| Platform Core | `s4-core`, `s4-storage`, `s4-events`, `s4-project` |
+| Knowledge Graph | `s4-graph`, `s4-knowledge`, `s4-parser` |
+| Plugin Infrastructure | `s4-plugin` + future plugin packages |
+| Language Ecosystem | Parser plugins (RFC for USIR schema) |
+| Analysis & Quality | `s4-analysis`, `s4-metrics`, `s4-verification`, `s4-certification` |
+| Intelligence (Interfaces) | `s4-llm`, `s4-planner` contracts only |
+| Developer Experience | `s4-cli`, `s4-api`, `s4-ui` |
 
 ---
 
@@ -259,12 +242,11 @@ Tier 5 → Tier 4 → Tier 3 → Tier 2 → Tier 1 → Tier 0
 
 **Forbidden:**
 
-- Tier 0–1 → Tier 2–5
-- Tier 0–2 → any `plugins/*` crate
-- `s4mp-graph` → `s4mp-reason`
+- Tier 0 → any outer tier
+- `s4-graph` / `s4-knowledge` → `s4-llm`
 - Any core crate → HTTP client, LLM SDK, language parser
 
-Enforced by `s4mp-arch-test` and `deny.toml`.
+Enforced by `deny.toml` and code review.
 
 ---
 

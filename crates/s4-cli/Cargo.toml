@@ -1,0 +1,20 @@
+[package]
+name = "s4-cli"
+description = "Command-line interface for S4MP"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "s4"
+path = "src/main.rs"
+
+[dependencies]
+s4-core = { workspace = true }
+clap = { workspace = true }
+
+[lints]
+workspace = true

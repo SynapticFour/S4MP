@@ -1,0 +1,18 @@
+[package]
+name = "s4-knowledge"
+description = "Software knowledge graph contracts for S4MP"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[dependencies]
+s4-core = { workspace = true }
+s4-graph = { workspace = true }
+s4-parser = { workspace = true }
+serde = { workspace = true }
+
+[lints]
+workspace = true

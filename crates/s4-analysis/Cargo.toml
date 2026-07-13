@@ -1,0 +1,18 @@
+[package]
+name = "s4-analysis"
+description = "Architecture and feature analysis contracts for S4MP"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[dependencies]
+s4-core = { workspace = true }
+s4-graph = { workspace = true }
+s4-knowledge = { workspace = true }
+serde = { workspace = true }
+
+[lints]
+workspace = true

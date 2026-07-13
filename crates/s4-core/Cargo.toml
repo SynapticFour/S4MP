@@ -1,0 +1,17 @@
+[package]
+name = "s4-core"
+description = "Foundation types, identifiers, errors, and versioning for S4MP"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[dependencies]
+blake3 = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

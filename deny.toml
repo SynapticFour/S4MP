@@ -1,5 +1,4 @@
-# Architecture dependency policy for S4MP.
-# Run: cargo deny check
+# Architecture dependency policy for S4MP (s4-* workspace).
 
 [graph]
 targets = []
@@ -11,12 +10,11 @@ ignore = []
 multiple-versions = "warn"
 wildcards = "deny"
 deny = [
-    # Tier 0-1 must never depend on LLM or HTTP client crates directly.
-    { crate = "reqwest", reason = "HTTP clients belong in surface/API crates only" },
-    { crate = "hyper", reason = "HTTP stack belongs in s4mp-api only" },
-    { crate = "openai-api-rs", reason = "LLM providers belong in reasoner plugins only" },
-    { crate = "async-openai", reason = "LLM providers belong in reasoner plugins only" },
-    { crate = "anthropic", reason = "LLM providers belong in reasoner plugins only" },
+    { crate = "reqwest", reason = "HTTP clients belong in future transport impls, not core" },
+    { crate = "hyper", reason = "HTTP stack belongs in future s4-api transport impls" },
+    { crate = "async-openai", reason = "LLM providers belong in plugins only" },
+    { crate = "openai-api-rs", reason = "LLM providers belong in plugins only" },
+    { crate = "anthropic", reason = "LLM providers belong in plugins only" },
 ]
 
 [sources]
