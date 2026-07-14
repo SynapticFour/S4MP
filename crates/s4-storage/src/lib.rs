@@ -14,7 +14,10 @@ pub mod artifact;
 pub mod manifest;
 /// Storage reader/writer traits.
 pub mod store;
+/// JSON file-backed CAS store.
+pub mod filesystem;
 
 pub use artifact::{Artifact, ArtifactKind};
+pub use filesystem::FileSystemStore;
 pub use manifest::{Manifest, ManifestRef};
 pub use store::{Store, StoreReader, StoreWriter};

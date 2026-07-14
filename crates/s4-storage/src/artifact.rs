@@ -38,6 +38,8 @@ pub enum ArtifactKind {
     ReasonProposal,
     /// Verification certificate.
     Certificate,
+    /// Cross-graph node correspondence map (Java↔Rust porting, etc.).
+    CorrespondenceMap,
     /// Plugin-defined extension kind.
     Extension(String),
 }

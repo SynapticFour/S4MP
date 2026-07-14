@@ -4,6 +4,72 @@ A production-grade, modular, plugin-driven platform for software knowledge extra
 
 **The knowledge model is the product. AI is one consumer among many.**
 
+## Quick Start (Porting Pipeline)
+
+The fastest way to compare a Java codebase with a Rust port and get a Markdown diff report:
+
+### Prerequisites
+
+- Rust stable (`rustfmt`, `clippy`)
+- Git (for cloning Java sources)
+- `make` (optional, recommended)
+
+```bash
+cargo build --workspace
+```
+
+### Using the Makefile
+
+From the repository root, with your Rust port at `../my-hc-port`:
+
+```bash
+make sources RUST_LOCAL=../my-hc-port   # register GATK HC slice + Rust port
+make diff                               # graph → map → diff-report.md
+```
+
+Defaults target the **GATK HaplotypeCaller** Java slice. Override any variable:
+
+```bash
+make graph JAVA_SUBPATH=src/main/java/org/broadinstitute/hellbender/tools/walkers/haplotypecaller
+make diff RUST_LOCAL=../other-port
+```
+
+See [`Makefile`](Makefile) for all targets (`sources`, `graph`, `map`, `diff`, `clean-cache`).
+
+### Using the CLI directly
+
+```bash
+# Register sources
+cargo run -p s4-cli -- source add gatk-java-hc \
+  --git https://github.com/broadinstitute/gatk.git \
+  --subpath src/main/java/org/broadinstitute/hellbender/tools/walkers/haplotypecaller \
+  --lang java
+cargo run -p s4-cli -- source add hc-rust --local ../my-hc-port --lang rust
+
+# Build graphs, suggest mappings, render report
+cargo run -p s4-cli -- graph --source gatk-java-hc
+cargo run -p s4-cli -- graph --source hc-rust
+cargo run -p s4-cli -- map suggest --java gatk-java-hc --rust hc-rust
+cargo run -p s4-cli -- diff --java gatk-java-hc --rust hc-rust --out diff-report.md
+```
+
+**Full beginner guide:** [Porting Workflow](docs/guides/PORTING_WORKFLOW.md) — step-by-step CLI reference, troubleshooting, pipeline internals.
+
+**CLI command reference:** [`crates/s4-cli/README.md`](crates/s4-cli/README.md)
+
+### Workspace artifacts
+
+Commands create a local `.s4/` directory (git-ignored):
+
+```
+.s4/
+  sources.json       # registered aliases
+  cache/             # git clones
+  store/             # content-addressed JSON artifacts
+  graphs/            # graph build manifests
+  maps/              # correspondence map manifests
+```
+
 ## Workspace
 
 This repository is a [Cargo workspace](https://doc.rust-lang.org/cargo/reference/workspaces.html) of 18 focused crates. Each crate owns a single concern, exposes a documented public API of traits and types, and compiles independently.
@@ -11,16 +77,16 @@ This repository is a [Cargo workspace](https://doc.rust-lang.org/cargo/reference
 ```
 crates/
   s4-core            Foundation: IDs, errors, versioning
-  s4-storage         Content-addressed artifact store contracts
+  s4-storage         Content-addressed artifact store
   s4-events          Event bus contracts
   s4-plugin          Plugin system contracts
-  s4-project         Project workspace contracts
-  s4-parser          Universal parsing & USIR contracts
-  s4-graph           Universal code graph contracts
+  s4-project         Project workspace & source ingestion
+  s4-parser          Universal parsing & USIR (Java/Rust v1)
+  s4-graph           Universal code graph
   s4-knowledge       Software knowledge graph contracts
   s4-requirements    Requirements graph & traceability
   s4-metrics         Complexity & metrics contracts
-  s4-analysis        Architecture & feature analysis
+  s4-analysis        Lowering, correspondence, diff reports
   s4-planner         Refactoring planning contracts
   s4-verification    Verification & acceptance workflows
   s4-certification   Certification & compliance
@@ -48,23 +114,24 @@ Infrastructure (s4-storage, s4-events, s4-plugin, s4-project)
 Foundation (s4-core)
 ```
 
-## Quick Start
+## Development
 
 ```bash
-# Build entire workspace
 cargo build --workspace
-
-# Check a single crate in isolation
-cargo check -p s4-core
-cargo check -p s4-knowledge
-
-# Run CLI skeleton
-cargo run -p s4-cli -- init .
-cargo run -p s4-cli -- analyze
-cargo run -p s4-cli -- query --expr all
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo fmt --all
 ```
 
+See [Contributing](CONTRIBUTING.md) and [Engineering Standards](docs/engineering/ENGINEERING_STANDARDS.md).
+
 ## Documentation
+
+### Guides
+
+- **[Porting Workflow](docs/guides/PORTING_WORKFLOW.md)** — Java→Rust diff pipeline (Makefile + CLI)
+
+### Architecture & Standards
 
 - [Engineering Standards](docs/engineering/ENGINEERING_STANDARDS.md) — **mandatory before implementation**
 - [Contributing](CONTRIBUTING.md)
@@ -82,10 +149,11 @@ cargo run -p s4-cli -- query --expr all
 ## Design Rules
 
 0. **Follow [Engineering Standards](docs/engineering/ENGINEERING_STANDARDS.md)** — all implementation must comply.
-1. **No business logic in this skeleton** — traits, types, and module boundaries only.
+1. **Traits and contracts first** — extend via documented public APIs; v1 porting pipeline is implemented in `s4-cli` + capability crates.
 2. **No LLM provider dependencies** — `s4-llm` defines interfaces; providers are plugins.
 3. **All cross-boundary I/O is artifact-ID based** — via `s4-storage`.
 4. **LLM outputs are always `Proposed` lifecycle** — see `s4-knowledge`.
+5. **Heuristic correspondences require manual confirmation** — never auto-certified as ported.
 
 ## License
 

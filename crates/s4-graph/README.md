@@ -12,7 +12,8 @@ Defines nodes, edges, graph views, layers, and query interfaces for the code gra
 |--------|---------|
 | `node` | `Node`, `NodeKind` |
 | `edge` | `Edge`, `EdgeKind` |
-| `view` | `GraphView` trait |
+| `view` | `GraphView`, `GraphBuilder` |
+| `memory` | `InMemoryGraph`, `InMemoryGraphView` |
 | `layer` | `GraphLayer` |
 | `query` | `GraphQuery` trait |
 

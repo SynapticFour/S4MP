@@ -14,7 +14,15 @@ path = "src/main.rs"
 
 [dependencies]
 s4-core = { workspace = true }
+s4-storage = { workspace = true }
+s4-project = { workspace = true }
+s4-parser = { workspace = true }
+s4-graph = { workspace = true }
+s4-analysis = { workspace = true }
 clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+walkdir = { workspace = true }
 
 [lints]
 workspace = true

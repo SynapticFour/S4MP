@@ -8,6 +8,8 @@ pub struct ParseUnit {
     pub path: String,
     /// Detected or declared language.
     pub language: LanguageId,
-    /// Optional pre-loaded content artifact.
+    /// Optional pre-loaded content artifact (future: blob/text artifact in CAS).
     pub content: Option<ArtifactId>,
+    /// Optional inline source text. When set, takes precedence over reading `path`.
+    pub source_text: Option<String>,
 }

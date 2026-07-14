@@ -6,7 +6,8 @@ Thank you for contributing. All work must follow the platform engineering standa
 
 1. Read [Engineering Standards](docs/engineering/ENGINEERING_STANDARDS.md) — **mandatory** for every PR.
 2. Read [Architecture Specification](docs/architecture/ARCHITECTURE.md) for system context.
-3. For architectural choices, open an [ADR](docs/adr/README.md) or [RFC](docs/rfc/README.md) before large implementations.
+3. For the Java→Rust porting pipeline, see [Porting Workflow Guide](docs/guides/PORTING_WORKFLOW.md).
+4. For architectural choices, open an [ADR](docs/adr/README.md) or [RFC](docs/rfc/README.md) before large implementations.
 
 ## Development Setup
 
