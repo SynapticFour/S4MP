@@ -22,6 +22,7 @@ pub struct UsirModuleBuilder {
     relations: Vec<UsirRelation>,
     callable_ids: HashMap<String, u64>,
     type_ids: HashMap<String, u64>,
+    deferred_calls: Vec<(u64, String)>,
 }
 
 impl UsirModuleBuilder {
@@ -44,6 +45,7 @@ impl UsirModuleBuilder {
             relations: Vec::new(),
             callable_ids: HashMap::new(),
             type_ids: HashMap::new(),
+            deferred_calls: Vec::new(),
         })
     }
 
@@ -94,6 +96,21 @@ impl UsirModuleBuilder {
         }
     }
 
+    /// Defer heuristic call detection for `caller_id` until [`Self::build`].
+    ///
+    /// Bodies are resolved against the full [`Self::callable_ids`] map after all callables
+    /// in the module have been registered.
+    pub fn defer_calls(&mut self, caller_id: u64, body: String) {
+        self.deferred_calls.push((caller_id, body));
+    }
+
+    fn resolve_deferred_calls(&mut self) {
+        let deferred = std::mem::take(&mut self.deferred_calls);
+        for (caller_id, body) in deferred {
+            self.add_heuristic_calls(caller_id, &body);
+        }
+    }
+
     /// Heuristic call detection: `callee(` substring in `body` maps to known callables.
     ///
     /// v1 only — no overload resolution, imports, or method dispatch semantics.
@@ -114,7 +131,8 @@ impl UsirModuleBuilder {
 
     /// Finalize the module graph.
     #[must_use]
-    pub fn build(self) -> UsirModule {
+    pub fn build(mut self) -> UsirModule {
+        self.resolve_deferred_calls();
         UsirModule {
             name: self.module_name,
             entities: self.entities,
@@ -266,7 +284,18 @@ fn module_name_from_path(path: &str, source_root: &Path) -> Result<String> {
 
 fn contains_call(body: &str, callee: &str) -> bool {
     let needle = format!("{callee}(");
-    body.contains(&needle)
+    let bytes = body.as_bytes();
+    let mut start = 0;
+    while let Some(pos) = body[start..].find(&needle) {
+        let abs_pos = start + pos;
+        let boundary_ok = abs_pos == 0
+            || !(bytes[abs_pos - 1].is_ascii_alphanumeric() || bytes[abs_pos - 1] == b'_');
+        if boundary_ok {
+            return true;
+        }
+        start = abs_pos + 1;
+    }
+    false
 }
 
 fn dedupe_preserve_order(names: Vec<String>) -> Vec<String> {
@@ -302,5 +331,15 @@ mod tests {
     fn heuristic_call_detects_simple_invocation() {
         assert!(contains_call("foo(bar);", "foo"));
         assert!(!contains_call("foo bar;", "foo"));
+    }
+
+    #[test]
+    fn contains_call_rejects_substring_false_positive() {
+        assert!(!contains_call("reget(x);", "get"));
+    }
+
+    #[test]
+    fn contains_call_finds_real_match_among_similar_identifiers() {
+        assert!(contains_call("x = get(1) + reget(2);", "get"));
     }
 }

@@ -11,7 +11,7 @@ It is aimed at beginners — no prior S4MP knowledge required beyond a working R
 | Register sources | `s4 source add` | `.s4/sources.json` |
 | Build graphs | `s4 graph` | USIR modules + graph in CAS, manifest in `.s4/graphs/` |
 | Suggest mappings | `s4 map suggest` | Correspondence map in `.s4/maps/` |
-| Review diff | `s4 diff` | `diff-report.md` |
+| Review diff | `s4 diff` | `.s4/reports/diff-report.md` |
 
 The pipeline uses **heuristic name matching** (Jaccard on tokenized identifiers). Every `Diverged` row must be manually confirmed before treating it as ported.
 
@@ -41,10 +41,12 @@ Running commands from the repository root creates a local `.s4/` directory (git-
 ```
 .s4/
   sources.json              # registered source aliases
-  cache/<alias>/            # git clones
+  cache/<alias>/            # git clones (sparse checkout when --subpath is set)
   store/<hex>.json          # content-addressed artifacts (USIR, graphs, maps)
   graphs/<alias>.json       # graph build manifests
   maps/<java>__<rust>.json  # correspondence map manifests
+  reports/                  # diff reports (default: diff-report.md)
+  exports/                  # graph DOT/JSON/SVG exports
 ```
 
 ## Option A — Makefile (Recommended for HaplotypeCaller)
@@ -73,14 +75,19 @@ make map
 
 # 4. Render Markdown diff report
 make diff
-# → diff-report.md
+# → .s4/reports/diff-report.md
+make open-report   # print report path
 ```
+
+| `GRAPH_FILTER` | `callable,calls,type,defines` | Node/edge kinds for `graph export` |
 
 Override any variable inline:
 
 ```bash
 make graph JAVA_SUBPATH=src/main/java/org/broadinstitute/hellbender/tools/walkers/haplotypecaller
 make diff RUST_LOCAL=../other-port
+make graph-export-rust GRAPH_FILTER=callable,calls
+make graph-export-svg
 ```
 
 Reset cached artifacts (keeps `sources.json` and map manifests):
@@ -97,8 +104,12 @@ make clean-cache
 | `graph-java` | — | Build graph for Java alias |
 | `graph-rust` | — | Build graph for Rust alias |
 | `graph` | `graph-java`, `graph-rust` | Both graphs |
+| `graph-export` | `graph-export-java`, `graph-export-rust` | Export DOT files to `.s4/exports/` |
+| `graph-export-svg` | `graph-export-rust` | Render `.s4/exports/hc-rust.svg` (requires Graphviz) |
 | `map` | `graph` | `s4 map suggest` |
-| `diff` | `map` | `s4 diff` → `diff-report.md` |
+| `diff` | `map` | `s4 diff` → `.s4/reports/diff-report.md` |
+| `open-report` | — | Print diff report path |
+| `install-hooks` | — | Enable local pre-commit checks (fmt, clippy, test) |
 | `clean-cache` | — | Remove `.s4/cache`, `.s4/store`, `.s4/graphs` |
 
 ## Option B — CLI Only
@@ -138,17 +149,55 @@ cargo run -p s4-cli -- source list
 ### 2. Build semantic graphs
 
 ```bash
-cargo run -p s4-cli -- graph --source gatk-java-hc
-cargo run -p s4-cli -- graph --source hc-rust
+cargo run -p s4-cli -- graph build --source gatk-java-hc
+cargo run -p s4-cli -- graph build --source hc-rust
 ```
 
 Optional: custom manifest output directory (default: `.s4/graphs`):
 
 ```bash
-cargo run -p s4-cli -- graph --source gatk-java-hc --out-dir .s4/graphs
+cargo run -p s4-cli -- graph build --source gatk-java-hc --out-dir .s4/graphs
 ```
 
 Expected terminal output includes file counts, callable/type statistics, and artifact IDs.
+
+### 2b. Export graph for visualization (optional)
+
+Export a Graphviz DOT file (after `graph build`):
+
+```bash
+cargo run -p s4-cli -- graph export \
+  --source hc-rust \
+  --format dot \
+  --filter callable,calls,type,defines
+```
+
+Default output: `.s4/exports/hc-rust.dot` (one file per source alias).
+
+Render SVG (requires [Graphviz](https://graphviz.org/)):
+
+```bash
+dot -Tsvg .s4/exports/hc-rust.dot -o .s4/exports/hc-rust.svg
+open .s4/exports/hc-rust.svg
+```
+
+Or with Make:
+
+```bash
+make graph-export-rust   # build + export .s4/exports/hc-rust.dot
+make graph-export-svg    # also render .s4/exports/hc-rust.svg
+```
+
+**Filter tokens** (comma-separated, or `all`):
+
+| Token | Matches |
+|-------|---------|
+| `callable`, `type`, `module`, `symbol`, `package` | Node kinds |
+| `calls`, `defines`, `references`, `depends_on`, `implements` | Edge kinds |
+
+Edges include their endpoint nodes even when the endpoint kind is not listed (e.g. `callable,calls` shows call edges between callables).
+
+JSON export: `--format json` → `.s4/exports/hc-rust.json` (default naming)
 
 ### 3. Suggest correspondences
 
@@ -183,11 +232,12 @@ Re-run `map suggest` after graph rebuilds; manual confirmations are preserved vi
 ```bash
 cargo run -p s4-cli -- diff \
   --java gatk-java-hc \
-  --rust hc-rust \
-  --out diff-report.md
+  --rust hc-rust
 ```
 
-Open `diff-report.md` in your editor. Sections:
+Default output: `.s4/reports/diff-report.md`. Override with `--out <path>`.
+
+Open `.s4/reports/diff-report.md` in your editor. Sections:
 
 - **Summary** — coverage metrics
 - **Fehlt im Rust-Port** — Java nodes with no Rust counterpart
@@ -208,7 +258,7 @@ SourceRef  →  DefaultSourceIngestor  →  local tree
                 ↓
          suggest_correspondences  →  CorrespondenceMap artifact
                 ↓
-         build_diff_report + render_markdown  →  diff-report.md
+         build_diff_report + render_markdown  →  .s4/reports/diff-report.md
 ```
 
 Key crates:
@@ -235,11 +285,11 @@ Key crates:
 | Problem | Likely cause | Fix |
 |---------|--------------|-----|
 | `unknown source alias` | Source not registered | Run `source add` or `make sources` |
-| `graph manifest ... not found` | Graph not built | Run `s4 graph --source <alias>` |
+| `graph manifest ... not found` | Graph not built | Run `s4 graph build --source <alias>` |
 | `git clone failed` | Network / URL / ref | Check `--git`, `--git-ref`; try manual clone into `.s4/cache/<alias>` |
 | `local source path does not exist` | Wrong `--local` path | Use absolute or correct relative path |
 | Empty diff / 0% coverage | Graphs not built or wrong aliases | Verify with `source list` and `map list` |
-| Slow first run | Git shallow clone + parse | Subsequent runs reuse `.s4/cache/` |
+| Slow first run | Git shallow/sparse clone + parse | Subsequent runs reuse `.s4/cache/` |
 
 ## Next Steps
 

@@ -499,12 +499,28 @@ pub fn load_correspondence_entries(
     s4_analysis::load_correspondence_map(store, &id)
 }
 
-const SKIP_DIR_NAMES: &[&str] = &[".git", "target", "node_modules", ".s4"];
+const SKIP_DIR_NAMES: &[&str] = &[".git", "target", "node_modules"];
 
 fn should_skip_entry(path: &Path) -> bool {
-    path.components().any(|component| {
-        matches!(component, Component::Normal(name) if SKIP_DIR_NAMES.contains(&name.to_str().unwrap_or("")))
-    })
+    let components: Vec<_> = path.components().collect();
+    for (i, component) in components.iter().enumerate() {
+        if let Component::Normal(name) = component {
+            let name = name.to_str().unwrap_or("");
+            if name == ".s4" {
+                // Workspace metadata under `.s4/` — but not git source caches (`.s4/cache/`).
+                let next_is_cache = components
+                    .get(i + 1)
+                    .and_then(|c| c.as_os_str().to_str())
+                    == Some("cache");
+                if !next_is_cache {
+                    return true;
+                }
+            } else if SKIP_DIR_NAMES.contains(&name) {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T> {

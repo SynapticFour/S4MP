@@ -49,13 +49,14 @@ s4 source add hc-rust --local ../my-hc-port --lang rust
 s4 source list
 ```
 
-### Graph build
+### Graph build & export
 
 | Command | Description |
 |---------|-------------|
-| `graph --source <alias> [--out-dir .s4/graphs]` | Parse source → USIR → semantic graph |
+| `graph build --source <alias> [--out-dir .s4/graphs]` | Parse source → USIR → semantic graph |
+| `graph export --source <alias> [--format dot] [--filter …] [-o <file>]` | Export DOT or JSON (default: `.s4/exports/<alias>.{dot,json}`) |
 
-Pipeline steps (with terminal feedback):
+Pipeline steps for `graph build` (with terminal feedback):
 
 1. Resolve source (clone/fetch for Git)
 2. Physical snapshot → CAS
@@ -64,9 +65,15 @@ Pipeline steps (with terminal feedback):
 5. Write graph manifest JSON
 
 ```bash
-s4 graph --source gatk-java-hc
-s4 graph --source hc-rust --out-dir .s4/graphs
+s4 graph build --source gatk-java-hc
+s4 graph build --source hc-rust --out-dir .s4/graphs
+
+# Visualize Rust graph (defaults write under .s4/exports/)
+s4 graph export --source hc-rust --format dot --filter callable,calls,type,defines
+dot -Tsvg .s4/exports/hc-rust.dot -o .s4/exports/hc-rust.svg
 ```
+
+Makefile shortcuts: `make graph-export-rust`, `make graph-export-svg`
 
 ### Correspondence map
 
@@ -87,10 +94,11 @@ s4 map list
 
 | Command | Description |
 |---------|-------------|
-| `diff --java <alias> --rust <alias> [--out diff-report.md]` | Render Markdown porting diff |
+| `diff --java <alias> --rust <alias> [--out .s4/reports/diff-report.md]` | Render Markdown porting diff |
 
 ```bash
-s4 diff --java gatk-java-hc --rust hc-rust --out diff-report.md
+s4 diff --java gatk-java-hc --rust hc-rust
+make open-report   # print default report path
 ```
 
 ## Makefile Shortcuts
@@ -113,8 +121,10 @@ The CLI reads/writes under `.s4/` in the current working directory:
 | `sources.json` | `source add` |
 | `cache/<alias>/` | Git ingest |
 | `store/<hex>.json` | All artifact writes |
-| `graphs/<alias>.json` | `graph` |
+| `graphs/<alias>.json` | `graph build` |
 | `maps/<java>__<rust>.json` | `map suggest` |
+| `reports/diff-report.md` | `diff` (default) |
+| `exports/<alias>.dot` | `graph export` (default) |
 
 Implementation: [`src/workspace.rs`](src/workspace.rs), command handlers in [`src/commands/`](src/commands/).
 

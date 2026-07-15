@@ -1,4 +1,5 @@
 # Rust
+/target
 /target/
 **/*.rs.bk
 
@@ -14,9 +15,12 @@
 Thumbs.db
 
 # S4MP workspace artifacts
+/.s4/
 .s4/
 .s4mp/
 *.s4mp-store/
+*.dot
+*.svg
 
 # Environment
 .env

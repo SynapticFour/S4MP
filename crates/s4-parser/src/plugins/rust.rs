@@ -48,7 +48,7 @@ fn walk_rust_node(node: Node<'_>, source: &str, builder: &mut UsirModuleBuilder)
                 add_type_references(id, node, source, builder);
                 if let Some(body) = node.child_by_field_name("body") {
                     if let Ok(body_text) = body.utf8_text(source.as_bytes()) {
-                        builder.add_heuristic_calls(id, body_text);
+                        builder.defer_calls(id, body_text.to_string());
                     }
                 }
             }
@@ -75,5 +75,46 @@ fn walk_rust_node(node: Node<'_>, source: &str, builder: &mut UsirModuleBuilder)
 fn add_type_references(from: u64, node: Node<'_>, source: &str, builder: &mut UsirModuleBuilder) {
     for type_name in collect_type_names(node, source) {
         builder.reference_type(from, &type_name);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::usir::{UsirEntityKind, UsirRelationKind};
+
+    fn has_calls_relation(module: &crate::UsirModule, caller: &str, callee: &str) -> bool {
+        let callable_id = |name: &str| {
+            module
+                .entities
+                .iter()
+                .find(|e| e.name == name && e.kind == UsirEntityKind::Callable)
+                .map(|e| e.id)
+        };
+        let Some(from) = callable_id(caller) else {
+            return false;
+        };
+        let Some(to) = callable_id(callee) else {
+            return false;
+        };
+        module.relations.iter().any(|r| {
+            r.from == from && r.to == to && r.kind == UsirRelationKind::Calls
+        })
+    }
+
+    #[test]
+    fn forward_call_in_document_order_is_detected() {
+        let source = r#"
+fn caller() {
+    callee();
+}
+fn callee() {}
+"#;
+        let source_root = std::env::temp_dir();
+        let module = extract_rust_module(source, "example.rs", &source_root).unwrap();
+        assert!(
+            has_calls_relation(&module, "caller", "callee"),
+            "caller defined before callee must still produce a Calls edge after deferred resolution"
+        );
     }
 }

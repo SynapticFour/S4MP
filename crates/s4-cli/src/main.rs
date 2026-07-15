@@ -1,6 +1,7 @@
 //! S4MP command-line interface.
 
 mod commands;
+mod graph_export;
 mod workspace;
 
 use clap::{Parser, Subcommand};
@@ -44,14 +45,10 @@ enum Commands {
         #[command(subcommand)]
         action: SourceAction,
     },
-    /// Build a semantic graph from a registered source.
+    /// Build or export semantic graphs for registered sources.
     Graph {
-        /// Source alias from `source add`.
-        #[arg(long)]
-        source: String,
-        /// Directory for graph manifest output.
-        #[arg(long, default_value = ".s4/graphs")]
-        out_dir: String,
+        #[command(subcommand)]
+        action: GraphAction,
     },
     /// Manage Java↔Rust correspondence maps.
     Map {
@@ -67,7 +64,35 @@ enum Commands {
         #[arg(long)]
         rust: String,
         /// Output Markdown file path.
-        #[arg(long, default_value = "diff-report.md")]
+        #[arg(long, default_value = ".s4/reports/diff-report.md")]
+        out: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum GraphAction {
+    /// Parse source, lower USIR, and write graph manifest + CAS artifacts.
+    Build {
+        /// Source alias from `source add`.
+        #[arg(long)]
+        source: String,
+        /// Directory for graph manifest output.
+        #[arg(long, default_value = ".s4/graphs")]
+        out_dir: String,
+    },
+    /// Export a built graph for visualization (Graphviz DOT or JSON).
+    Export {
+        /// Source alias (must have been built with `graph build`).
+        #[arg(long)]
+        source: String,
+        /// Output format: `dot` or `json`.
+        #[arg(long, default_value = "dot")]
+        format: String,
+        /// Comma-separated node/edge kinds (`callable,calls,type,defines`, or `all`).
+        #[arg(long, default_value = "callable,calls,type,defines")]
+        filter: String,
+        /// Output file path.
+        #[arg(long, short = 'o', default_value = ".s4/exports/graph")]
         out: String,
     },
 }
@@ -163,7 +188,15 @@ fn run(cli: Cli) -> Result<()> {
             ),
             SourceAction::List => source::run_list(),
         },
-        Commands::Graph { source, out_dir } => graph::run(&source, &out_dir),
+        Commands::Graph { action } => match action {
+            GraphAction::Build { source, out_dir } => graph::run_build(&source, &out_dir),
+            GraphAction::Export {
+                source,
+                format,
+                filter,
+                out,
+            } => graph::run_export(&source, &format, &filter, &out),
+        },
         Commands::Map { action } => match action {
             MapAction::Suggest { java, rust } => map::run_suggest(&java, &rust),
             MapAction::Confirm { id } => map::run_confirm(&id),

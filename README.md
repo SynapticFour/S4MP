@@ -24,7 +24,7 @@ From the repository root, with your Rust port at `../my-hc-port`:
 
 ```bash
 make sources RUST_LOCAL=../my-hc-port   # register GATK HC slice + Rust port
-make diff                               # graph → map → diff-report.md
+make diff                               # graph → map → .s4/reports/diff-report.md
 ```
 
 Defaults target the **GATK HaplotypeCaller** Java slice. Override any variable:
@@ -34,7 +34,7 @@ make graph JAVA_SUBPATH=src/main/java/org/broadinstitute/hellbender/tools/walker
 make diff RUST_LOCAL=../other-port
 ```
 
-See [`Makefile`](Makefile) for all targets (`sources`, `graph`, `map`, `diff`, `clean-cache`).
+See [`Makefile`](Makefile) for all targets (`sources`, `graph`, `graph-export`, `graph-export-svg`, `map`, `diff`, `open-report`, `install-hooks`, `clean-cache`).
 
 ### Using the CLI directly
 
@@ -47,10 +47,22 @@ cargo run -p s4-cli -- source add gatk-java-hc \
 cargo run -p s4-cli -- source add hc-rust --local ../my-hc-port --lang rust
 
 # Build graphs, suggest mappings, render report
-cargo run -p s4-cli -- graph --source gatk-java-hc
-cargo run -p s4-cli -- graph --source hc-rust
+cargo run -p s4-cli -- graph build --source gatk-java-hc
+cargo run -p s4-cli -- graph build --source hc-rust
 cargo run -p s4-cli -- map suggest --java gatk-java-hc --rust hc-rust
-cargo run -p s4-cli -- diff --java gatk-java-hc --rust hc-rust --out diff-report.md
+cargo run -p s4-cli -- diff --java gatk-java-hc --rust hc-rust
+
+# Visualize Rust graph (requires graph build + Graphviz for SVG)
+cargo run -p s4-cli -- graph export --source hc-rust --format dot --filter callable,calls,type,defines
+dot -Tsvg .s4/exports/hc-rust.dot -o .s4/exports/hc-rust.svg
+```
+
+Or with Make:
+
+```bash
+make graph-export-rust    # builds graph + exports .s4/exports/hc-rust.dot
+make graph-export-svg     # also renders .s4/exports/hc-rust.svg (needs `dot`)
+make open-report          # print path to diff report
 ```
 
 **Full beginner guide:** [Porting Workflow](docs/guides/PORTING_WORKFLOW.md) — step-by-step CLI reference, troubleshooting, pipeline internals.
@@ -64,10 +76,12 @@ Commands create a local `.s4/` directory (git-ignored):
 ```
 .s4/
   sources.json       # registered aliases
-  cache/             # git clones
+  cache/             # git clones (sparse checkout when --subpath is set)
   store/             # content-addressed JSON artifacts
   graphs/            # graph build manifests
   maps/              # correspondence map manifests
+  reports/           # diff reports (default: diff-report.md)
+  exports/           # graph DOT/JSON/SVG exports
 ```
 
 ## Workspace
@@ -115,6 +129,14 @@ Foundation (s4-core)
 ```
 
 ## Development
+
+After cloning, run once to enable local pre-commit checks (fmt, clippy, test):
+
+```bash
+make install-hooks
+```
+
+This sets `core.hooksPath` to `.githooks/` in your **local** Git config (not versioned). Each contributor must run `make install-hooks` themselves — the repository cannot enforce this for everyone automatically.
 
 ```bash
 cargo build --workspace

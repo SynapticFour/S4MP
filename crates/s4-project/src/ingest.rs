@@ -59,6 +59,14 @@ impl DefaultSourceIngestor {
         })
     }
 
+    /// Resolve a Git remote into `.s4/cache/<alias>/`, optionally narrowing to `subpath`.
+    ///
+    /// When `subpath` is set and the cache directory does not yet exist, performs a sparse
+    /// checkout clone (`--filter=blob:none`, cone mode) instead of a full shallow clone.
+    /// That fetches tree and commit metadata completely but materializes file blobs only
+    /// for paths in the sparse-checkout set — a large bandwidth and time saving for huge
+    /// monorepos where most blobs live outside the target subtree. Requires Git >= 2.27 for
+    /// `--cone` sparse-checkout; if the local Git is too old, [`run_git`] surfaces stderr.
     fn resolve_git(
         &self,
         alias: &str,
@@ -73,6 +81,9 @@ impl DefaultSourceIngestor {
             if let Some(reference) = git_ref {
                 run_git(&["checkout", reference], &cache_path)?;
             }
+            if let Some(sub) = subpath {
+                run_git(&["sparse-checkout", "set", sub], &cache_path)?;
+            }
         } else {
             if let Some(parent) = cache_path.parent() {
                 std::fs::create_dir_all(parent).map_err(|e| {
@@ -84,14 +95,40 @@ impl DefaultSourceIngestor {
             }
 
             let dest = cache_path.to_string_lossy();
-            let mut args = vec!["clone", "--depth", "1"];
-            if let Some(reference) = git_ref {
-                args.push("--branch");
-                args.push(reference);
+            if let Some(sub) = subpath {
+                let mut clone_args = vec![
+                    "clone",
+                    "--filter=blob:none",
+                    "--no-checkout",
+                    "--depth",
+                    "1",
+                ];
+                if let Some(reference) = git_ref {
+                    clone_args.push("--branch");
+                    clone_args.push(reference);
+                }
+                clone_args.push(url);
+                clone_args.push(dest.as_ref());
+                run_git(&clone_args, self.workspace_root.as_path())?;
+
+                run_git(&["sparse-checkout", "init", "--cone"], &cache_path)?;
+                run_git(&["sparse-checkout", "set", sub], &cache_path)?;
+
+                if let Some(reference) = git_ref {
+                    run_git(&["checkout", reference], &cache_path)?;
+                } else {
+                    run_git(&["checkout"], &cache_path)?;
+                }
+            } else {
+                let mut args = vec!["clone", "--depth", "1"];
+                if let Some(reference) = git_ref {
+                    args.push("--branch");
+                    args.push(reference);
+                }
+                args.push(url);
+                args.push(dest.as_ref());
+                run_git(&args, self.workspace_root.as_path())?;
             }
-            args.push(url);
-            args.push(dest.as_ref());
-            run_git(&args, self.workspace_root.as_path())?;
         }
 
         let local_root = match subpath {
@@ -150,7 +187,8 @@ struct PhysicalSnapshotPayload {
 
 /// Walk `root`, hash every regular file, and return a physical snapshot artifact.
 ///
-/// Skips `.git/`, `target/`, `node_modules/`, and `.s4/` directories anywhere in the tree.
+/// Skips `.git/`, `target/`, `node_modules/`, and workspace metadata under `.s4/`
+/// (store, graphs, maps, …). Paths under `.s4/cache/` — git source trees — are walked normally.
 ///
 /// # Errors
 ///
@@ -207,12 +245,28 @@ pub fn snapshot_physical(root: &Path) -> Result<Artifact> {
     })
 }
 
-const SKIP_DIR_NAMES: &[&str] = &[".git", "target", "node_modules", ".s4"];
+const SKIP_DIR_NAMES: &[&str] = &[".git", "target", "node_modules"];
 
 fn should_skip_entry(path: &Path) -> bool {
-    path.components().any(|component| {
-        matches!(component, Component::Normal(name) if SKIP_DIR_NAMES.contains(&name.to_str().unwrap_or("")))
-    })
+    let components: Vec<_> = path.components().collect();
+    for (i, component) in components.iter().enumerate() {
+        if let Component::Normal(name) = component {
+            let name = name.to_str().unwrap_or("");
+            if name == ".s4" {
+                // Workspace metadata under `.s4/` — but not git source caches (`.s4/cache/`).
+                let next_is_cache = components
+                    .get(i + 1)
+                    .and_then(|c| c.as_os_str().to_str())
+                    == Some("cache");
+                if !next_is_cache {
+                    return true;
+                }
+            } else if SKIP_DIR_NAMES.contains(&name) {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 fn run_git(args: &[&str], cwd: &Path) -> Result<()> {
