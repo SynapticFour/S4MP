@@ -98,7 +98,7 @@ impl UsirModuleBuilder {
 
     /// Defer heuristic call detection for `caller_id` until [`Self::build`].
     ///
-    /// Bodies are resolved against the full [`Self::callable_ids`] map after all callables
+    /// Bodies are resolved against the full `callable_ids` map after all callables
     /// in the module have been registered.
     pub fn defer_calls(&mut self, caller_id: u64, body: String) {
         self.deferred_calls.push((caller_id, body));

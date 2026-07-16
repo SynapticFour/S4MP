@@ -8,7 +8,8 @@ ignore = []
 
 [bans]
 multiple-versions = "warn"
-wildcards = "deny"
+# Workspace path deps use `{ workspace = true }` which cargo-deny flags as wildcards.
+wildcards = "warn"
 deny = [
     { crate = "reqwest", reason = "HTTP clients belong in future transport impls, not core" },
     { crate = "hyper", reason = "HTTP stack belongs in future s4-api transport impls" },
