@@ -15,7 +15,10 @@ pub fn run(java: &str, rust: &str, out: &str) -> Result<()> {
     println!("Loading Java graph '{java}'...");
     let java_graph = load_graph_from_store(&store, &java_manifest.graph_artifact_id)?;
 
-    println!("Loading correspondence map ({} entries)...", map_manifest.entry_count);
+    println!(
+        "Loading correspondence map ({} entries)...",
+        map_manifest.entry_count
+    );
     let entries = load_correspondence_entries(&store, &map_manifest)?;
 
     println!("Building diff report...");
@@ -28,9 +31,8 @@ pub fn run(java: &str, rust: &str, out: &str) -> Result<()> {
     );
 
     let markdown = render_markdown(&report);
-    std::fs::write(out, &markdown).map_err(|e| {
-        s4_core::S4Error::Other(format!("failed to write diff report {out}: {e}"))
-    })?;
+    std::fs::write(out, &markdown)
+        .map_err(|e| s4_core::S4Error::Other(format!("failed to write diff report {out}: {e}")))?;
 
     println!("Diff report written to {out}");
     Ok(())

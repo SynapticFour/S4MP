@@ -159,12 +159,7 @@ impl SourceIngestor for DefaultSourceIngestor {
                 url,
                 git_ref,
                 subpath,
-            } => self.resolve_git(
-                &source.alias,
-                url,
-                git_ref.as_deref(),
-                subpath.as_deref(),
-            ),
+            } => self.resolve_git(&source.alias, url, git_ref.as_deref(), subpath.as_deref()),
         }
     }
 }
@@ -254,10 +249,8 @@ fn should_skip_entry(path: &Path) -> bool {
             let name = name.to_str().unwrap_or("");
             if name == ".s4" {
                 // Workspace metadata under `.s4/` — but not git source caches (`.s4/cache/`).
-                let next_is_cache = components
-                    .get(i + 1)
-                    .and_then(|c| c.as_os_str().to_str())
-                    == Some("cache");
+                let next_is_cache =
+                    components.get(i + 1).and_then(|c| c.as_os_str().to_str()) == Some("cache");
                 if !next_is_cache {
                     return true;
                 }

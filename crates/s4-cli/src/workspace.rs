@@ -5,7 +5,7 @@ use s4_core::{ArtifactId, Result, S4Error, SchemaVersion};
 use s4_graph::memory::InMemoryGraphView;
 use s4_graph::{Edge, GraphView, Node, NodeId, NodeKind};
 use s4_parser::{LanguageId, ParseUnit, UsirModule};
-use s4_project::{SourceRef, SourceOrigin};
+use s4_project::{SourceOrigin, SourceRef};
 use s4_storage::{Artifact, ArtifactKind, FileSystemStore, StoreReader, StoreWriter};
 use serde::{Deserialize, Serialize};
 use std::path::{Component, Path, PathBuf};
@@ -126,8 +126,7 @@ impl Workspace {
     /// Path to a map manifest for a Java/Rust alias pair.
     #[must_use]
     pub fn map_manifest_path(&self, java: &str, rust: &str) -> PathBuf {
-        self.maps_dir()
-            .join(format!("{java}__{rust}.json"))
+        self.maps_dir().join(format!("{java}__{rust}.json"))
     }
 
     /// Load the source registry (empty when missing).
@@ -140,12 +139,10 @@ impl Workspace {
         if !path.is_file() {
             return Ok(SourceRegistry::default());
         }
-        let bytes = std::fs::read(&path).map_err(|e| {
-            S4Error::Other(format!("failed to read {}: {e}", path.display()))
-        })?;
-        serde_json::from_slice(&bytes).map_err(|e| {
-            S4Error::Other(format!("failed to parse {}: {e}", path.display()))
-        })
+        let bytes = std::fs::read(&path)
+            .map_err(|e| S4Error::Other(format!("failed to read {}: {e}", path.display())))?;
+        serde_json::from_slice(&bytes)
+            .map_err(|e| S4Error::Other(format!("failed to parse {}: {e}", path.display())))
     }
 
     /// Persist the source registry.
@@ -163,12 +160,10 @@ impl Workspace {
                 ))
             })?;
         }
-        let bytes = serde_json::to_vec_pretty(registry).map_err(|e| {
-            S4Error::Other(format!("failed to serialize source registry: {e}"))
-        })?;
-        std::fs::write(&path, bytes).map_err(|e| {
-            S4Error::Other(format!("failed to write {}: {e}", path.display()))
-        })
+        let bytes = serde_json::to_vec_pretty(registry)
+            .map_err(|e| S4Error::Other(format!("failed to serialize source registry: {e}")))?;
+        std::fs::write(&path, bytes)
+            .map_err(|e| S4Error::Other(format!("failed to write {}: {e}", path.display())))
     }
 
     /// Look up a registered source by alias.
@@ -260,11 +255,13 @@ impl Workspace {
         }
         let mut manifests: Vec<MapManifest> = Vec::new();
         for entry in std::fs::read_dir(&dir).map_err(|e| {
-            S4Error::Other(format!("failed to read maps directory {}: {e}", dir.display()))
+            S4Error::Other(format!(
+                "failed to read maps directory {}: {e}",
+                dir.display()
+            ))
         })? {
-            let entry = entry.map_err(|e| {
-                S4Error::Other(format!("failed to read maps directory entry: {e}"))
-            })?;
+            let entry = entry
+                .map_err(|e| S4Error::Other(format!("failed to read maps directory entry: {e}")))?;
             let path = entry.path();
             if path.extension().is_some_and(|ext| ext == "json") {
                 manifests.push(read_json(&path)?);
@@ -351,9 +348,8 @@ pub fn discover_parse_units(root: &Path, language: &LanguageId) -> Result<Vec<Pa
         .into_iter()
         .filter_entry(|e| !should_skip_entry(e.path()))
     {
-        let entry = entry.map_err(|e| {
-            S4Error::Other(format!("failed to walk {}: {e}", root.display()))
-        })?;
+        let entry =
+            entry.map_err(|e| S4Error::Other(format!("failed to walk {}: {e}", root.display())))?;
         if !entry.file_type().is_file() {
             continue;
         }
@@ -405,9 +401,8 @@ pub fn save_graph_projection(
     graph: &dyn GraphView,
 ) -> Result<ArtifactId> {
     let payload = graph_to_payload(source_alias, graph);
-    let value = serde_json::to_value(&payload).map_err(|e| {
-        S4Error::Other(format!("failed to serialize graph projection: {e}"))
-    })?;
+    let value = serde_json::to_value(&payload)
+        .map_err(|e| S4Error::Other(format!("failed to serialize graph projection: {e}")))?;
     let artifact = Artifact {
         kind: ArtifactKind::GraphProjection,
         schema_version: SchemaVersion::CURRENT,
@@ -432,9 +427,8 @@ pub fn load_graph_from_store(store: &dyn StoreReader, id: &str) -> Result<InMemo
             artifact.kind
         )));
     }
-    let payload: GraphProjectionPayload = serde_json::from_value(artifact.payload).map_err(|e| {
-        S4Error::Other(format!("failed to deserialize graph projection: {e}"))
-    })?;
+    let payload: GraphProjectionPayload = serde_json::from_value(artifact.payload)
+        .map_err(|e| S4Error::Other(format!("failed to deserialize graph projection: {e}")))?;
     Ok(graph_from_payload(&payload))
 }
 
@@ -446,18 +440,17 @@ pub fn load_graph_from_store(store: &dyn StoreReader, id: &str) -> Result<InMemo
 pub fn load_usir_modules(store: &dyn StoreReader, ids: &[ArtifactId]) -> Result<Vec<UsirModule>> {
     let mut modules = Vec::with_capacity(ids.len());
     for id in ids {
-        let artifact = store.read(id)?.ok_or_else(|| {
-            S4Error::Other(format!("USIR module artifact not found: {id}"))
-        })?;
+        let artifact = store
+            .read(id)?
+            .ok_or_else(|| S4Error::Other(format!("USIR module artifact not found: {id}")))?;
         if artifact.kind != ArtifactKind::UsirModule {
             return Err(S4Error::Other(format!(
                 "expected usir_module artifact, got {:?}",
                 artifact.kind
             )));
         }
-        let module: UsirModule = serde_json::from_value(artifact.payload).map_err(|e| {
-            S4Error::Other(format!("failed to deserialize USIR module: {e}"))
-        })?;
+        let module: UsirModule = serde_json::from_value(artifact.payload)
+            .map_err(|e| S4Error::Other(format!("failed to deserialize USIR module: {e}")))?;
         modules.push(module);
     }
     Ok(modules)
@@ -508,10 +501,8 @@ fn should_skip_entry(path: &Path) -> bool {
             let name = name.to_str().unwrap_or("");
             if name == ".s4" {
                 // Workspace metadata under `.s4/` — but not git source caches (`.s4/cache/`).
-                let next_is_cache = components
-                    .get(i + 1)
-                    .and_then(|c| c.as_os_str().to_str())
-                    == Some("cache");
+                let next_is_cache =
+                    components.get(i + 1).and_then(|c| c.as_os_str().to_str()) == Some("cache");
                 if !next_is_cache {
                     return true;
                 }
@@ -524,12 +515,10 @@ fn should_skip_entry(path: &Path) -> bool {
 }
 
 fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T> {
-    let bytes = std::fs::read(path).map_err(|e| {
-        S4Error::Other(format!("failed to read {}: {e}", path.display()))
-    })?;
-    serde_json::from_slice(&bytes).map_err(|e| {
-        S4Error::Other(format!("failed to parse {}: {e}", path.display()))
-    })
+    let bytes = std::fs::read(path)
+        .map_err(|e| S4Error::Other(format!("failed to read {}: {e}", path.display())))?;
+    serde_json::from_slice(&bytes)
+        .map_err(|e| S4Error::Other(format!("failed to parse {}: {e}", path.display())))
 }
 
 fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
@@ -541,12 +530,10 @@ fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
             ))
         })?;
     }
-    let bytes = serde_json::to_vec_pretty(value).map_err(|e| {
-        S4Error::Other(format!("failed to serialize {}: {e}", path.display()))
-    })?;
-    std::fs::write(path, bytes).map_err(|e| {
-        S4Error::Other(format!("failed to write {}: {e}", path.display()))
-    })
+    let bytes = serde_json::to_vec_pretty(value)
+        .map_err(|e| S4Error::Other(format!("failed to serialize {}: {e}", path.display())))?;
+    std::fs::write(path, bytes)
+        .map_err(|e| S4Error::Other(format!("failed to write {}: {e}", path.display())))
 }
 
 fn hex_to_bytes(hex: &str) -> Result<[u8; 32]> {
@@ -558,12 +545,10 @@ fn hex_to_bytes(hex: &str) -> Result<[u8; 32]> {
     }
     let mut out = [0_u8; 32];
     for (index, chunk) in hex.as_bytes().chunks(2).enumerate() {
-        let pair = std::str::from_utf8(chunk).map_err(|e| {
-            S4Error::Other(format!("invalid artifact id encoding: {e}"))
-        })?;
-        out[index] = u8::from_str_radix(pair, 16).map_err(|e| {
-            S4Error::Other(format!("invalid artifact id hex: {e}"))
-        })?;
+        let pair = std::str::from_utf8(chunk)
+            .map_err(|e| S4Error::Other(format!("invalid artifact id encoding: {e}")))?;
+        out[index] = u8::from_str_radix(pair, 16)
+            .map_err(|e| S4Error::Other(format!("invalid artifact id hex: {e}")))?;
     }
     Ok(out)
 }

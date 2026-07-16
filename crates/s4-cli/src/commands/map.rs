@@ -1,9 +1,7 @@
-use crate::workspace::{
-    load_correspondence_entries, load_graph_from_store, Workspace,
-};
+use crate::workspace::{load_correspondence_entries, load_graph_from_store, Workspace};
 use s4_analysis::{
-    merge_correspondences, save_correspondence_map, suggest_correspondences,
-    CorrespondenceEntry, CorrespondenceMethod, CorrespondenceStatus, GraphId,
+    merge_correspondences, save_correspondence_map, suggest_correspondences, CorrespondenceEntry,
+    CorrespondenceMethod, CorrespondenceStatus, GraphId,
 };
 use s4_core::Result;
 

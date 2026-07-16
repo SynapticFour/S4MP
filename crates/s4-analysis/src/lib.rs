@@ -8,14 +8,14 @@
 pub mod architecture;
 /// Cross-graph correspondence types and heuristics.
 pub mod correspondence;
+/// Markdown diff reports from correspondence maps.
+pub mod diff_report;
 /// Feature extractor trait and types.
 pub mod feature;
 /// Finding types.
 pub mod finding;
 /// USIR to graph lowering.
 pub mod lowering;
-/// Markdown diff reports from correspondence maps.
-pub mod diff_report;
 /// Analysis pipeline trait.
 pub mod pipeline;
 
@@ -25,8 +25,8 @@ pub use correspondence::{
     suggest_correspondences, CorrespondenceEntry, CorrespondenceMethod, CorrespondenceStatus,
     GraphId, NodeRef,
 };
+pub use diff_report::{build_diff_report, render_markdown, DiffReport, DiffSummary};
 pub use feature::{Feature, FeatureExtractor, FeatureId};
 pub use finding::{Finding, FindingId, Severity};
-pub use diff_report::{build_diff_report, render_markdown, DiffReport, DiffSummary};
 pub use lowering::usir_to_graph;
 pub use pipeline::AnalysisPipeline;

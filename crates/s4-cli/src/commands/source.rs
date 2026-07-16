@@ -48,7 +48,10 @@ pub fn run_add(
 
     registry.sources.push(source);
     ws.save_sources(&registry)?;
-    println!("Registered source '{alias}' in {}", ws.sources_path().display());
+    println!(
+        "Registered source '{alias}' in {}",
+        ws.sources_path().display()
+    );
     Ok(())
 }
 
@@ -79,10 +82,7 @@ pub fn run_list() -> Result<()> {
             },
             SourceOrigin::Local { path } => path.display().to_string(),
         };
-        println!(
-            "  {}  [{}]  {}",
-            source.alias, source.language.0, origin
-        );
+        println!("  {}  [{}]  {}", source.alias, source.language.0, origin);
     }
     Ok(())
 }

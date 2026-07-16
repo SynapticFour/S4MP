@@ -128,7 +128,7 @@ mod tests {
     use super::*;
     use crate::usir::{UsirEntityKind, UsirRelationKind};
 
-    fn has_calls_relation(module: &crate::UsirModule, caller: &str, callee: &str) -> bool {
+    fn has_calls_relation(module: &crate::UsirModule, from_name: &str, to_name: &str) -> bool {
         let callable_id = |name: &str| {
             module
                 .entities
@@ -136,20 +136,21 @@ mod tests {
                 .find(|e| e.name == name && e.kind == UsirEntityKind::Callable)
                 .map(|e| e.id)
         };
-        let Some(from) = callable_id(caller) else {
+        let Some(from) = callable_id(from_name) else {
             return false;
         };
-        let Some(to) = callable_id(callee) else {
+        let Some(to) = callable_id(to_name) else {
             return false;
         };
-        module.relations.iter().any(|r| {
-            r.from == from && r.to == to && r.kind == UsirRelationKind::Calls
-        })
+        module
+            .relations
+            .iter()
+            .any(|r| r.from == from && r.to == to && r.kind == UsirRelationKind::Calls)
     }
 
     #[test]
     fn forward_call_in_document_order_is_detected() {
-        let source = r#"
+        let source = r"
 class Example {
     void caller() {
         callee();
@@ -157,7 +158,7 @@ class Example {
     void callee() {
     }
 }
-"#;
+";
         let source_root = std::env::temp_dir();
         let module = extract_java_module(source, "Example.java", &source_root).unwrap();
         assert!(

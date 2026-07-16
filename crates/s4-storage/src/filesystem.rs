@@ -71,9 +71,8 @@ impl StoreWriter for FileSystemStore {
         if path.is_file() {
             return Ok(id);
         }
-        let bytes = serde_json::to_vec_pretty(artifact).map_err(|e| {
-            S4Error::Other(format!("failed to serialize artifact for store: {e}"))
-        })?;
+        let bytes = serde_json::to_vec_pretty(artifact)
+            .map_err(|e| S4Error::Other(format!("failed to serialize artifact for store: {e}")))?;
         fs::write(&path, bytes).map_err(|e| {
             S4Error::Other(format!("failed to write artifact {}: {e}", path.display()))
         })?;

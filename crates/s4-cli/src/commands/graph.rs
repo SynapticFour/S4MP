@@ -7,7 +7,7 @@ use s4_core::Result;
 use s4_graph::NodeKind;
 use s4_parser::plugins::{parse_all_sequential, JavaParser, RustParser};
 use s4_parser::{LanguageId, ParseContext};
-use s4_project::{DefaultSourceIngestor, snapshot_physical, SourceIngestor};
+use s4_project::{snapshot_physical, DefaultSourceIngestor, SourceIngestor};
 use s4_storage::StoreWriter;
 use std::path::{Path, PathBuf};
 
@@ -35,11 +35,7 @@ pub fn run_build(source: &str, out_dir: &str) -> Result<()> {
     println!("  {file_count} files hashed (artifact {snapshot_id})");
 
     let units = discover_parse_units(&resolved.local_root, &source_ref.language)?;
-    println!(
-        "Parsing {} {} files...",
-        units.len(),
-        source_ref.language.0
-    );
+    println!("Parsing {} {} files...", units.len(), source_ref.language.0);
 
     let mut ctx = ParseContext {
         source_root: &resolved.local_root,
@@ -69,9 +65,7 @@ pub fn run_build(source: &str, out_dir: &str) -> Result<()> {
     let node_count = s4_graph::GraphView::node_count(graph.as_ref());
     let callable_nodes = count_nodes(graph.as_ref(), &NodeKind::Callable);
     let type_nodes = count_nodes(graph.as_ref(), &NodeKind::Type);
-    println!(
-        "  {node_count} nodes ({callable_nodes} callables, {type_nodes} types)"
-    );
+    println!("  {node_count} nodes ({callable_nodes} callables, {type_nodes} types)");
 
     let out_path = Path::new(out_dir);
     std::fs::create_dir_all(out_path).map_err(|e| {
@@ -92,9 +86,8 @@ pub fn run_build(source: &str, out_dir: &str) -> Result<()> {
     };
 
     let manifest_path = out_path.join(format!("{source}.json"));
-    let bytes = serde_json::to_vec_pretty(&manifest).map_err(|e| {
-        s4_core::S4Error::Other(format!("failed to serialize graph manifest: {e}"))
-    })?;
+    let bytes = serde_json::to_vec_pretty(&manifest)
+        .map_err(|e| s4_core::S4Error::Other(format!("failed to serialize graph manifest: {e}")))?;
     std::fs::write(&manifest_path, bytes).map_err(|e| {
         s4_core::S4Error::Other(format!(
             "failed to write graph manifest {}: {e}",

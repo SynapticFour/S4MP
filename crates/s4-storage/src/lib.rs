@@ -10,12 +10,12 @@
 
 /// Typed artifact envelopes and kinds.
 pub mod artifact;
+/// JSON file-backed CAS store.
+pub mod filesystem;
 /// Snapshot manifest types.
 pub mod manifest;
 /// Storage reader/writer traits.
 pub mod store;
-/// JSON file-backed CAS store.
-pub mod filesystem;
 
 pub use artifact::{Artifact, ArtifactKind};
 pub use filesystem::FileSystemStore;

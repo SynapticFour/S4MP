@@ -133,11 +133,7 @@ pub fn render_markdown(report: &DiffReport) -> String {
         "| Java callables | {} |",
         report.summary.total_java_callables
     );
-    let _ = writeln!(
-        out,
-        "| Java types | {} |",
-        report.summary.total_java_types
-    );
+    let _ = writeln!(out, "| Java types | {} |", report.summary.total_java_types);
     let _ = writeln!(out, "| Ported | {} |", report.summary.ported_count);
     let _ = writeln!(out, "| Diverged | {} |", report.summary.diverged_count);
     let _ = writeln!(
@@ -208,7 +204,7 @@ fn count_java_nodes(graph: &dyn GraphView) -> (usize, usize) {
             match node.kind {
                 NodeKind::Callable => callables += 1,
                 NodeKind::Type => types += 1,
-                _ => {}
+                _ => {},
             }
         }
     }
@@ -258,10 +254,7 @@ fn resolve_display_name(entry: &CorrespondenceEntry, graph: &dyn GraphView) -> S
 }
 
 fn entry_line_name(entry: &CorrespondenceEntry) -> String {
-    entry
-        .note
-        .clone()
-        .unwrap_or_else(|| entry.id.clone())
+    entry.note.clone().unwrap_or_else(|| entry.id.clone())
 }
 
 #[cfg(test)]

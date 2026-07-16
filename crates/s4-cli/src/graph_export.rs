@@ -3,7 +3,7 @@
 use crate::workspace::GraphProjectionPayload;
 use s4_core::{Result, S4Error};
 use s4_graph::{EdgeKind, NodeKind};
-use std::collections::{HashSet, BTreeSet};
+use std::collections::{BTreeSet, HashSet};
 use std::fmt::Write as _;
 
 /// Parsed `--filter` tokens for graph export.
@@ -123,9 +123,8 @@ fn apply_filter<'a>(
         included_nodes.insert(edge.to.0);
     }
 
-    included_edges.retain(|e| {
-        included_nodes.contains(&e.from.0) && included_nodes.contains(&e.to.0)
-    });
+    included_edges
+        .retain(|e| included_nodes.contains(&e.from.0) && included_nodes.contains(&e.to.0));
 
     (included_nodes, included_edges)
 }
@@ -247,7 +246,13 @@ fn node_color(kind: &str) -> &'static str {
 
 fn sanitize_dot_id(name: &str) -> String {
     name.chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect()
 }
 
@@ -309,12 +314,7 @@ mod tests {
     #[test]
     fn render_dot_contains_nodes_and_edges() {
         let filter = parse_filter("all");
-        let dot = render_export(
-            &sample_payload(),
-            &filter,
-            GraphExportFormat::Dot,
-        )
-        .expect("dot");
+        let dot = render_export(&sample_payload(), &filter, GraphExportFormat::Dot).expect("dot");
         assert!(dot.contains("digraph \"hc_rust\""));
         assert!(dot.contains("n1"));
         assert!(dot.contains("callable: run"));
