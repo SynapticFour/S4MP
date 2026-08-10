@@ -10,6 +10,8 @@ pub mod analyzer;
 pub mod host;
 /// Importer plugin trait.
 pub mod importer;
+/// In-process host implementation (Phase 6).
+pub mod in_process;
 /// Plugin manifest types.
 pub mod manifest;
 /// Parser plugin trait.
@@ -24,6 +26,7 @@ pub mod verifier;
 pub use analyzer::Analyzer;
 pub use host::PluginHost;
 pub use importer::Importer;
+pub use in_process::InProcessPluginHost;
 pub use manifest::{CapabilitySet, PluginCapability, PluginManifest};
 pub use parser::Parser;
 pub use plugin::{InvocationContext, Plugin, PluginOutput};

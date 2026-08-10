@@ -141,7 +141,9 @@ pub fn render_markdown(report: &DiffReport) -> String {
     out.push_str(
         "Name (+ optional signature) similarity maps only — not semantic equivalence, not a certificate. ",
     );
-    out.push_str("`s4 certify` / `s4 verify` are not implemented.\n\n");
+    out.push_str(
+        "`s4 verify` / `s4 certify` evaluate coverage/policy thresholds only — not semantic equivalence.\n\n",
+    );
 
     out.push_str("## Summary\n\n");
     out.push_str("| Metric | Value |\n");

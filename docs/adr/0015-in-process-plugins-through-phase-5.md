@@ -13,7 +13,7 @@ Plugin docs describe Phase 1 static in-process registration and later WASM sandb
 
 1. **Phases 0–5** use **trusted first-party, in-process** plugins (Rust crates linked into `s4-cli` / future engines).
 2. Parser, analyzer, and verifier “plugins” may start as ordinary modules implementing `s4-plugin` traits — no dynamic loading required yet.
-3. **WASM sandbox, remote registry, and third-party trust tiers are deferred to Phase 6** (or later), after the pass pipeline and verification story work in-process.
+3. **WASM sandbox, remote registry, and third-party trust tiers are deferred** past Phase 5 (see [ADR-016](./0016-phase6-in-process-host-wasm-deferred.md) — Phase 6 ships an in-process host; WASM remains deferred).
 4. Core must still avoid embedding language-specific rule catalogs (ADR-013); in-process does not mean “logic in `s4-core`.”
 
 ## Consequences

@@ -1,4 +1,4 @@
-use s4_parser::LanguageId;
+use s4_core::LanguageId;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 

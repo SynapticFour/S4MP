@@ -30,13 +30,15 @@ cargo run -p s4-cli -- source list
 | `knowledge extract` | **implemented** (Phase 4) | Naming concept extraction |
 | `verify` | **implemented** (Phase 5) | Coverage/trace thresholds over artifacts |
 | `certify --policy <name>` | **implemented** (Phase 5) | Policy over `VerificationRun` only |
+| `plugin list` | **implemented** (Phase 6) | Built-in in-process plugin manifests |
+| `reason` | **implemented** (Phase 6) | Offline heuristic proposals (always Proposed) |
 
-**Maturity:** `heuristic-map-v2`. Certification is **not** semantic equivalence.
-
-**Maturity:** `heuristic-map-v2`. Unimplemented commands exit non-zero with a pointer to [IMPLEMENTATION_ROADMAP.md](../../docs/guides/IMPLEMENTATION_ROADMAP.md).
+**Maturity:** `heuristic-map-v2`. Certification is **not** semantic equivalence. LLM/heuristic outputs are never ground truth.
 
 ```bash
 s4 analyze --java mini-java --rust mini-rust
+s4 plugin list
+s4 reason --intent explain --prompt "why is coverage low?"
 ```
 
 

@@ -1,5 +1,3 @@
-use serde::{Deserialize, Serialize};
+//! Language identifiers (re-exported from `s4-core` for parser convenience).
 
-/// Identifier for a programming or markup language.
-#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
-pub struct LanguageId(pub String);
+pub use s4_core::LanguageId;

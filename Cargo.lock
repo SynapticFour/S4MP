@@ -373,8 +373,10 @@ dependencies = [
  "s4-events",
  "s4-graph",
  "s4-knowledge",
+ "s4-llm",
  "s4-metrics",
  "s4-parser",
+ "s4-plugin",
  "s4-project",
  "s4-requirements",
  "s4-storage",
@@ -476,7 +478,6 @@ version = "0.1.0"
 dependencies = [
  "blake3",
  "s4-core",
- "s4-parser",
  "s4-storage",
  "serde",
  "serde_json",

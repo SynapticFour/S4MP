@@ -13,9 +13,10 @@ Defines request, context, policy, and proposal types for AI-assisted reasoning. 
 | `request` | `ReasonRequest`, `ReasonIntent` |
 | `context` | `ContextBundle` |
 | `policy` | `ReasonPolicy` |
-| `proposal` | `Proposal`, `ProposedClaim`, `ModelMetadata` |
+| `proposal` | `Proposal`, `ProposalLifecycle`, `ProposedClaim`, `ModelMetadata` |
 | `provider` | `LlmProvider` trait |
+| `heuristic` | `HeuristicLlmProvider` (offline; always Proposed) |
 
 ## Tier
 
-2 — Intelligence (interfaces only)
+3 — Intelligence (interfaces + offline heuristic)

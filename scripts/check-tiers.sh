@@ -17,15 +17,6 @@ tier_of() {
   esac
 }
 
-# Known exceptions (tracked debt). Format: "dependent:dependency"
-# s4-project embeds LanguageId from s4-parser; relocate LanguageId to s4-core in Phase 3.
-is_allowed_exception() {
-  case "$1:$2" in
-    s4-project:s4-parser) return 0 ;;
-    *) return 1 ;;
-  esac
-}
-
 errors=0
 for crate_dir in crates/s4-*; do
   crate="$(basename "$crate_dir")"
@@ -42,10 +33,6 @@ for crate_dir in crates/s4-*; do
     dep_tier="$(tier_of "$dep")"
     [ -n "$dep_tier" ] || continue
     if [ "$dep_tier" -gt "$my_tier" ]; then
-      if is_allowed_exception "$crate" "$dep"; then
-        echo "warn: allowed exception $crate → $dep (tier $my_tier → $dep_tier)"
-        continue
-      fi
       echo "error: $crate (tier $my_tier) depends on $dep (tier $dep_tier) — upward dependency" >&2
       errors=$((errors + 1))
     fi

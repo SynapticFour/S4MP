@@ -9,5 +9,5 @@ pub const MATURITY: &str = "heuristic-map-v2";
 pub const MATURITY_NOTICE: &str = concat!(
     "Maturity: heuristic-map-v2. ",
     "Name (+ optional signature) similarity maps only — not semantic equivalence, not a certificate. ",
-    "`s4 certify` / `s4 verify` are not implemented."
+    "`s4 verify` / `s4 certify` evaluate coverage/policy thresholds only; LLM outputs stay Proposed."
 );

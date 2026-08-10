@@ -18,6 +18,7 @@ Defines plugin manifests, capability declarations, and specialized plugin traits
 | `reasoner` | `Reasoner` trait |
 | `verifier` | `Verifier` trait |
 | `host` | `PluginHost` trait |
+| `in_process` | `InProcessPluginHost` (Phase 6 builtins) |
 
 ## Tier
 

@@ -6,7 +6,7 @@ A production-grade, modular, plugin-driven platform for software knowledge extra
 
 > **Maturity:** `heuristic-map-v2`
 > What ships today is a **heuristic Java↔Rust port map** (`source` → `graph` → `map` → `diff`) using name (+ optional signature) similarity.
-> It is **not** semantic equivalence, **not** a certificate, and `s4 certify` / `s4 verify` are **not implemented**.
+> It is **not** semantic equivalence. `s4 verify` / `s4 certify` evaluate coverage/policy thresholds only; `s4 reason` outputs stay **Proposed**.
 > Roadmap: [Implementation Roadmap](docs/guides/IMPLEMENTATION_ROADMAP.md).
 
 ## Quick Start (Porting Pipeline)

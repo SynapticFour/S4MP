@@ -63,11 +63,10 @@ P0 honesty/schema/e2e
 
 **Status:** **done** (filter query, graph diff, basic metrics)
 
-Also deferred: relocate `LanguageId` to `s4-core` (tier exception remains).
-
 - Durable graph artifacts; `GraphDiff` by `(kind,label)` — **done** (`s4 graph diff`)
 - Minimal `s4 query` (`all` | `kind:*` | `label~*`) + optional `--metrics` — **done**
 - Metrics pass (counts, fan-in/out via avg calls/callable) — **done**
+- `LanguageId` → `s4-core` (clears former tier exception) — **done** in Phase 6
 
 ---
 
@@ -95,7 +94,12 @@ Also deferred: relocate `LanguageId` to `s4-core` (tier exception remains).
 
 ## Phase 6 — Plugin runtime & LLM consumer
 
-**Status:** next (deferred in this pass — contracts already exist; WASM later)
+**Status:** **done** (in-process; WASM deferred — ADR-016)
+
+- Relocate `LanguageId` to `s4-core`; remove `s4-project → s4-parser` tier exception — **done**
+- `InProcessPluginHost` + built-in manifests; `s4 plugin list` — **done**
+- `HeuristicLlmProvider` + `s4 reason` (outputs always `Proposed`) — **done**
+- WASM sandbox / remote registry / third-party trust — **deferred** (Phase 7+)
 
 ---
 
@@ -105,6 +109,7 @@ Also deferred: relocate `LanguageId` to `s4-core` (tier exception remains).
 |----------|-----|--------|
 | Stay on JSON CAS (v0.1) | ADR-014 | Phase 2 |
 | In-process plugins only (Phases 0–5) | ADR-015 | Phase 2 |
+| Phase 6 host in-process; WASM later | ADR-016 | Phase 6 |
 | Symbol identity across renames | TBD | Phase 3–5 |
 | What “certified” means for HC | TBD | Phase 5 |
 
@@ -115,3 +120,4 @@ Also deferred: relocate `LanguageId` to `s4-core` (tier exception remains).
 - Remote plugin marketplace
 - Proof-assistant verification
 - Replacing `gatk-rs` parity tests
+- WASM plugin sandbox (until an ADR supersedes ADR-016)

@@ -6,6 +6,8 @@
 
 /// Context bundle types.
 pub mod context;
+/// Offline heuristic provider (Phase 6).
+pub mod heuristic;
 /// Reasoning policy types.
 pub mod policy;
 /// Proposal and model metadata types.
@@ -16,7 +18,8 @@ pub mod provider;
 pub mod request;
 
 pub use context::ContextBundle;
+pub use heuristic::HeuristicLlmProvider;
 pub use policy::ReasonPolicy;
-pub use proposal::{ModelMetadata, Proposal, ProposalKind, ProposedClaim};
+pub use proposal::{ModelMetadata, Proposal, ProposalKind, ProposalLifecycle, ProposedClaim};
 pub use provider::LlmProvider;
 pub use request::{ReasonIntent, ReasonRequest};

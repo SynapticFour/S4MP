@@ -6,7 +6,8 @@ mod workspace;
 
 use clap::{Parser, Subcommand};
 use commands::{
-    analyze, certify, diff, graph, init, knowledge, map, query, require, source, verify,
+    analyze, certify, diff, graph, init, knowledge, map, plugin, query, reason, require, source,
+    verify,
 };
 use s4_core::Result;
 
@@ -17,10 +18,12 @@ use s4_core::Result;
     version,
     about = "SynapticFour Method Platform — heuristic Java↔Rust port maps (not certification)",
     long_about = "SynapticFour Method Platform (S4MP).\n\n\
-Shipped today: init, source, graph, map, diff, analyze, query, require, knowledge, verify, certify.\n\
-Honesty: certify evaluates verification-run policy only — not semantic equivalence.\n\n\
+Shipped today: init, source, graph, map, diff, analyze, query, require, knowledge, verify, certify, \
+plugin, reason.\n\
+Honesty: certify evaluates verification-run policy only — not semantic equivalence. \
+`s4 reason` outputs are always Proposed.\n\n\
 Maturity: heuristic-map-v2. Name (+ optional signature) similarity maps only — not semantic \
-equivalence, not a certificate. `s4 certify` / `s4 verify` are not implemented."
+equivalence, not a certificate."
 )]
 struct Cli {
     #[command(subcommand)]
@@ -126,6 +129,23 @@ enum Commands {
         #[command(subcommand)]
         action: KnowledgeAction,
     },
+    /// List in-process plugins (Phase 6; WASM deferred).
+    Plugin {
+        #[command(subcommand)]
+        action: PluginAction,
+    },
+    /// Offline heuristic reasoning (outputs always Proposed).
+    Reason {
+        /// Intent: `explain` | `refactor` | `map` | `architecture`.
+        #[arg(long, default_value = "explain")]
+        intent: String,
+        /// Optional prompt text hashed into the context bundle.
+        #[arg(long)]
+        prompt: Option<String>,
+        /// Proposal JSON output path.
+        #[arg(long, default_value = ".s4/proposals/latest.json")]
+        out: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -164,6 +184,12 @@ enum KnowledgeAction {
         #[arg(long)]
         source: String,
     },
+}
+
+#[derive(Subcommand)]
+enum PluginAction {
+    /// List built-in registered plugins.
+    List,
 }
 
 #[derive(Subcommand)]
@@ -334,5 +360,13 @@ fn run(cli: Cli) -> Result<()> {
         Commands::Knowledge { action } => match action {
             KnowledgeAction::Extract { source } => knowledge::run_extract(&source),
         },
+        Commands::Plugin { action } => match action {
+            PluginAction::List => plugin::run_list(),
+        },
+        Commands::Reason {
+            intent,
+            prompt,
+            out,
+        } => reason::run(&intent, prompt.as_deref(), &out),
     }
 }

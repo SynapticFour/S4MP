@@ -20,8 +20,10 @@ Formal ADRs referenced from [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) w
 | ADR-013 | LLVM infrastructure, not SonarQube rule engine | Accepted |
 | [ADR-014](./0014-json-artifact-encoding-v0.1.md) | JSON artifact encoding for v0.1 | Accepted |
 | [ADR-015](./0015-in-process-plugins-through-phase-5.md) | In-process plugins through Phase 5 | Accepted |
+| [ADR-016](./0016-phase6-in-process-host-wasm-deferred.md) | Phase 6 in-process host; WASM still deferred | Accepted |
 
 ## Open
 
 - Graph storage at scale
 - Query language: S4QL vs Datalog/Cypher subset
+- WASM plugin sandbox (deferred past Phase 6; see ADR-016)
