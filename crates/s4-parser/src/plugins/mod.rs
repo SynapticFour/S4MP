@@ -3,10 +3,12 @@
 mod java;
 mod rust;
 
-pub use java::JavaParser;
-pub use rust::RustParser;
+pub use java::{extract_java_module, JavaParser};
+pub use rust::{extract_rust_module, RustParser};
 
-use crate::usir::{UsirEntity, UsirEntityKind, UsirModule, UsirRelation, UsirRelationKind};
+use crate::usir::{
+    UnresolvedCall, UsirEntity, UsirEntityKind, UsirModule, UsirRelation, UsirRelationKind,
+};
 use crate::{ParseContext, ParsePipeline, ParseUnit};
 use s4_core::{Result, S4Error, SchemaVersion};
 use s4_storage::{Artifact, ArtifactKind, StoreWriter};
@@ -37,6 +39,7 @@ impl UsirModuleBuilder {
             id: 0,
             kind: UsirEntityKind::Module,
             name: module_name.clone(),
+            signature: None,
         }];
         Ok(Self {
             module_name,
@@ -51,22 +54,22 @@ impl UsirModuleBuilder {
 
     /// Add a type entity (class, interface, enum, struct, trait, …).
     pub fn add_type(&mut self, name: &str) -> u64 {
-        self.add_entity(name, UsirEntityKind::Type)
+        self.add_entity(name, UsirEntityKind::Type, None)
     }
 
     /// Add a callable entity (method, function, constructor, …).
-    pub fn add_callable(&mut self, name: &str) -> u64 {
-        let id = self.add_entity(name, UsirEntityKind::Callable);
+    pub fn add_callable(&mut self, name: &str, signature: Option<String>) -> u64 {
+        let id = self.add_entity(name, UsirEntityKind::Callable, signature);
         self.callable_ids.insert(name.to_string(), id);
         id
     }
 
     /// Add a symbol entity (field, const, static, …).
     pub fn add_symbol(&mut self, name: &str) -> u64 {
-        self.add_entity(name, UsirEntityKind::Symbol)
+        self.add_entity(name, UsirEntityKind::Symbol, None)
     }
 
-    fn add_entity(&mut self, name: &str, kind: UsirEntityKind) -> u64 {
+    fn add_entity(&mut self, name: &str, kind: UsirEntityKind, signature: Option<String>) -> u64 {
         let id = self.next_id;
         self.next_id += 1;
         if kind == UsirEntityKind::Type {
@@ -76,6 +79,7 @@ impl UsirModuleBuilder {
             id,
             kind,
             name: name.to_string(),
+            signature,
         });
         self.relations.push(UsirRelation {
             from: 0,
@@ -99,22 +103,28 @@ impl UsirModuleBuilder {
     /// Defer heuristic call detection for `caller_id` until [`Self::build`].
     ///
     /// Bodies are resolved against the full `callable_ids` map after all callables
-    /// in the module have been registered.
+    /// in the module have been registered. Unresolved names become
+    /// [`UsirModule::unresolved_calls`] for cross-module linking.
     pub fn defer_calls(&mut self, caller_id: u64, body: String) {
         self.deferred_calls.push((caller_id, body));
     }
 
-    fn resolve_deferred_calls(&mut self) {
+    fn resolve_deferred_calls(&mut self) -> Vec<UnresolvedCall> {
         let deferred = std::mem::take(&mut self.deferred_calls);
+        let mut unresolved = Vec::new();
         for (caller_id, body) in deferred {
-            self.add_heuristic_calls(caller_id, &body);
+            unresolved.extend(self.add_heuristic_calls(caller_id, &body));
         }
+        unresolved
     }
 
     /// Heuristic call detection: `callee(` substring in `body` maps to known callables.
     ///
-    /// v1 only — no overload resolution, imports, or method dispatch semantics.
-    pub fn add_heuristic_calls(&mut self, caller_id: u64, body: &str) {
+    /// Returns unresolved callee names for cross-module linking.
+    pub fn add_heuristic_calls(&mut self, caller_id: u64, body: &str) -> Vec<UnresolvedCall> {
+        let mut unresolved = Vec::new();
+        let mut seen_unresolved = HashSet::new();
+
         for (name, &callee_id) in &self.callable_ids {
             if caller_id == callee_id {
                 continue;
@@ -127,16 +137,31 @@ impl UsirModuleBuilder {
                 });
             }
         }
+
+        // Collect simple identifier-call patterns that did not match local callables.
+        for name in extract_call_names(body) {
+            if self.callable_ids.contains_key(&name) {
+                continue;
+            }
+            if seen_unresolved.insert(name.clone()) {
+                unresolved.push(UnresolvedCall {
+                    from: caller_id,
+                    callee_name: name,
+                });
+            }
+        }
+        unresolved
     }
 
     /// Finalize the module graph.
     #[must_use]
     pub fn build(mut self) -> UsirModule {
-        self.resolve_deferred_calls();
+        let unresolved_calls = self.resolve_deferred_calls();
         UsirModule {
             name: self.module_name,
             entities: self.entities,
             relations: self.relations,
+            unresolved_calls,
         }
     }
 }
@@ -298,6 +323,51 @@ fn contains_call(body: &str, callee: &str) -> bool {
     false
 }
 
+/// Extract simple `name(` call identifiers from a body (heuristic).
+fn extract_call_names(body: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    let bytes = body.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i].is_ascii_alphabetic() || bytes[i] == b'_' {
+            let start = i;
+            i += 1;
+            while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
+                i += 1;
+            }
+            if i < bytes.len() && bytes[i] == b'(' {
+                let name = &body[start..i];
+                if !is_keyword(name) {
+                    names.push(name.to_string());
+                }
+            }
+        } else {
+            i += 1;
+        }
+    }
+    dedupe_preserve_order(names)
+}
+
+fn is_keyword(name: &str) -> bool {
+    matches!(
+        name,
+        "if" | "for"
+            | "while"
+            | "switch"
+            | "catch"
+            | "return"
+            | "new"
+            | "typeof"
+            | "sizeof"
+            | "match"
+            | "loop"
+            | "async"
+            | "await"
+            | "super"
+            | "this"
+    )
+}
+
 fn dedupe_preserve_order(names: Vec<String>) -> Vec<String> {
     let mut seen = HashSet::new();
     names
@@ -306,7 +376,7 @@ fn dedupe_preserve_order(names: Vec<String>) -> Vec<String> {
         .collect()
 }
 
-/// Parse units sequentially (correctness before parallelism in v1).
+/// Parse units sequentially and persist USIR artifacts.
 ///
 /// # Errors
 ///
@@ -319,6 +389,41 @@ pub fn parse_all_sequential<P: ParsePipeline + ?Sized>(
     let mut ids = Vec::with_capacity(units.len());
     for unit in units {
         ids.extend(pipeline.parse_unit(unit, ctx)?);
+    }
+    Ok(ids)
+}
+
+/// Extract USIR modules in parallel (no store I/O), then persist sequentially.
+///
+/// # Errors
+///
+/// Returns an error if any unit fails to parse or persist, or if a worker thread panics.
+pub fn parse_all_cached<F>(
+    units: &[ParseUnit],
+    source_root: &Path,
+    store: &mut dyn StoreWriter,
+    extract: F,
+) -> Result<Vec<s4_core::ArtifactId>>
+where
+    F: Fn(&ParseUnit, &Path) -> Result<UsirModule> + Sync,
+{
+    let modules: Result<Vec<UsirModule>> = std::thread::scope(|scope| {
+        let handles: Vec<_> = units
+            .iter()
+            .map(|unit| scope.spawn(|| extract(unit, source_root)))
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| {
+                h.join()
+                    .unwrap_or_else(|_| Err(S4Error::Other("parse worker panicked".to_string())))
+            })
+            .collect()
+    });
+    let modules = modules?;
+    let mut ids = Vec::with_capacity(modules.len());
+    for module in &modules {
+        ids.push(persist_usir_module(store, module)?);
     }
     Ok(ids)
 }
@@ -341,5 +446,12 @@ mod tests {
     #[test]
     fn contains_call_finds_real_match_among_similar_identifiers() {
         assert!(contains_call("x = get(1) + reget(2);", "get"));
+    }
+
+    #[test]
+    fn extract_call_names_skips_keywords() {
+        let names = extract_call_names("if (x) { foo(1); }");
+        assert!(names.contains(&"foo".to_string()));
+        assert!(!names.contains(&"if".to_string()));
     }
 }

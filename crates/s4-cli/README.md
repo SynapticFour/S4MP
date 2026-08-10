@@ -23,11 +23,22 @@ cargo run -p s4-cli -- source list
 
 | Command | Status | Description |
 |---------|--------|-------------|
-| `init [path]` | stub | Initialize workspace |
-| `analyze` | stub | Run analysis pipeline |
-| `query --expr <expr>` | stub | Query knowledge graph |
-| `verify` | stub | Run verification |
-| `certify --policy <name>` | stub | Evaluate certification policy |
+| `init [path]` | **implemented** | Create `.s4/` layout + `workspace.json` |
+| `analyze` | **implemented** (Phase 2) | Graph all sources → map/diff for Java+Rust pair |
+| `query --source <alias> --expr <expr>` | **implemented** (Phase 3) | Filter query (`all` / `kind:*` / `label~*`) |
+| `require …` | **implemented** (Phase 4) | Requirements CRUD / OpenAPI / traces |
+| `knowledge extract` | **implemented** (Phase 4) | Naming concept extraction |
+| `verify` | **implemented** (Phase 5) | Coverage/trace thresholds over artifacts |
+| `certify --policy <name>` | **implemented** (Phase 5) | Policy over `VerificationRun` only |
+
+**Maturity:** `heuristic-map-v2`. Certification is **not** semantic equivalence.
+
+**Maturity:** `heuristic-map-v2`. Unimplemented commands exit non-zero with a pointer to [IMPLEMENTATION_ROADMAP.md](../../docs/guides/IMPLEMENTATION_ROADMAP.md).
+
+```bash
+s4 analyze --java mini-java --rust mini-rust
+```
+
 
 ### Source management
 

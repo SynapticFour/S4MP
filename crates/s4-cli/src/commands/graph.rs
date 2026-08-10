@@ -5,8 +5,10 @@ use crate::workspace::{
 use s4_analysis::usir_to_graph;
 use s4_core::Result;
 use s4_graph::NodeKind;
-use s4_parser::plugins::{parse_all_sequential, JavaParser, RustParser};
-use s4_parser::{LanguageId, ParseContext};
+use s4_parser::plugins::{
+    extract_java_module, extract_rust_module, parse_all_cached, JavaParser, RustParser,
+};
+use s4_parser::{LanguageId, ParseContext, ParseUnit};
 use s4_project::{snapshot_physical, DefaultSourceIngestor, SourceIngestor};
 use s4_storage::StoreWriter;
 use std::path::{Path, PathBuf};
@@ -162,6 +164,39 @@ pub fn run_export(source: &str, format: &str, filter: &str, out: &str) -> Result
     Ok(())
 }
 
+/// Diff two built graphs by `(kind, label)` identity.
+pub fn run_diff(left: &str, right: &str) -> Result<()> {
+    use crate::workspace::{load_graph_from_store, Workspace};
+    use s4_graph::GraphDiff;
+
+    let ws = Workspace::open(".")?;
+    ws.find_source(left)?;
+    ws.find_source(right)?;
+    let left_manifest = ws.load_graph_manifest(left)?;
+    let right_manifest = ws.load_graph_manifest(right)?;
+    let store = ws.store()?;
+    let left_graph = load_graph_from_store(&store, &left_manifest.graph_artifact_id)?;
+    let right_graph = load_graph_from_store(&store, &right_manifest.graph_artifact_id)?;
+
+    let diff = GraphDiff::from_views(&left_graph, &right_graph);
+    println!("graph diff: {left} → {right}");
+    println!("  shared: {}", diff.shared.len());
+    println!("  only in {left}: {}", diff.only_left.len());
+    for (kind, label) in &diff.only_left {
+        println!("    - [{kind:?}] {label}");
+    }
+    println!("  only in {right}: {}", diff.only_right.len());
+    for (kind, label) in &diff.only_right {
+        println!("    - [{kind:?}] {label}");
+    }
+    println!(
+        "  calls edges: {} vs {}",
+        GraphDiff::call_edge_count(&left_graph),
+        GraphDiff::call_edge_count(&right_graph)
+    );
+    Ok(())
+}
+
 fn resolve_export_path(out: &str, source: &str, format: GraphExportFormat) -> PathBuf {
     let ext = match format {
         GraphExportFormat::Dot => "dot",
@@ -177,12 +212,31 @@ fn resolve_export_path(out: &str, source: &str, format: GraphExportFormat) -> Pa
 
 fn parse_with_language(
     language: &LanguageId,
-    units: &[s4_parser::ParseUnit],
+    units: &[ParseUnit],
     ctx: &mut ParseContext<'_>,
 ) -> Result<Vec<s4_core::ArtifactId>> {
     match language.0.as_str() {
-        "java" => parse_all_sequential(&JavaParser, units, ctx),
-        "rust" => parse_all_sequential(&RustParser, units, ctx),
+        "java" => {
+            // Prefer parallel extract + sequential CAS write when there is more than one unit.
+            if units.len() > 1 {
+                parse_all_cached(units, ctx.source_root, ctx.store, |unit, root| {
+                    let source = s4_parser::plugins::read_unit_source(unit)?;
+                    extract_java_module(&source, &unit.path, root)
+                })
+            } else {
+                s4_parser::plugins::parse_all_sequential(&JavaParser, units, ctx)
+            }
+        },
+        "rust" => {
+            if units.len() > 1 {
+                parse_all_cached(units, ctx.source_root, ctx.store, |unit, root| {
+                    let source = s4_parser::plugins::read_unit_source(unit)?;
+                    extract_rust_module(&source, &unit.path, root)
+                })
+            } else {
+                s4_parser::plugins::parse_all_sequential(&RustParser, units, ctx)
+            }
+        },
         other => Err(s4_core::S4Error::Other(format!(
             "no parser registered for language '{other}'"
         ))),

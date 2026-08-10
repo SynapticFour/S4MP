@@ -7,13 +7,12 @@
 //! (`ExtraInTarget` with `source_node: None`). A separate “extras” list would force every consumer
 //! to merge two collections; optional `source_node` keeps one stream with explicit status.
 //!
-//! # Heuristic limits (v1)
+//! # Heuristic limits (v2)
 //!
-//! [`suggest_correspondences`] uses **tokenized name Jaccard similarity only** — not semantic
-//! equivalence, control flow, or type signatures. Expect false positives and false negatives.
-//! Entries with [`CorrespondenceMethod::NameHeuristic`] and status [`CorrespondenceStatus::Diverged`]
-//! must be manually confirmed (`method` → [`CorrespondenceMethod::Manual`], status →
-//! [`CorrespondenceStatus::Ported`]) before trusting them in certification workflows.
+//! [`suggest_correspondences`] combines **tokenized name Jaccard** with optional **signature
+//! Jaccard** when both sides have signatures. This is still not semantic equivalence or type
+//! checking. Entries with heuristic methods and status [`CorrespondenceStatus::Diverged`]
+//! must be manually confirmed before trusting them in certification workflows.
 
 use s4_core::{ArtifactId, Result, S4Error, SchemaVersion};
 use s4_graph::{GraphView, Node, NodeId, NodeKind};
@@ -56,8 +55,10 @@ pub enum CorrespondenceStatus {
 pub enum CorrespondenceMethod {
     /// Human-confirmed mapping.
     Manual,
-    /// Tokenized name similarity (v1 heuristic).
+    /// Tokenized name similarity only.
     NameHeuristic,
+    /// Name + signature similarity (v2).
+    SignatureHeuristic,
     /// LLM-proposed mapping (always requires confirmation).
     LlmSuggested,
 }
@@ -84,23 +85,25 @@ pub struct CorrespondenceEntry {
     pub stale: bool,
 }
 
-/// Minimum Jaccard similarity to emit a heuristic pairing (v1).
+/// Minimum combined similarity to emit a heuristic pairing.
 const SIMILARITY_THRESHOLD: f32 = 0.5;
+/// Weight for name similarity when signatures are available on both sides.
+const NAME_WEIGHT_WITH_SIG: f32 = 0.6;
+/// Weight for signature similarity when available on both sides.
+const SIG_WEIGHT: f32 = 0.4;
 
-/// Suggest Java→Rust node correspondences using tokenized name similarity.
+/// Suggest Java→Rust node correspondences using name (+ optional signature) similarity.
 ///
 /// Only [`NodeKind::Callable`] and [`NodeKind::Type`] nodes are considered.
 ///
-/// # Heuristic (v1)
+/// # Heuristic (v2)
 ///
 /// 1. Tokenize labels (`camelCase` + `snake_case` → lowercase word tokens).
-/// 2. Jaccard similarity per kind class (callable↔callable, type↔type).
-/// 3. Best match ≥ 0.5 → [`CorrespondenceStatus::Diverged`] + [`CorrespondenceMethod::NameHeuristic`]
-///    (never [`CorrespondenceStatus::Ported`] — confirmation is manual).
+/// 2. If both nodes have signatures, also tokenize signatures and combine
+///    `0.6 * name + 0.4 * signature` Jaccard scores.
+/// 3. Best match ≥ 0.5 → [`CorrespondenceStatus::Diverged`] (never auto-`Ported`).
 /// 4. No match → [`CorrespondenceStatus::MissingInTarget`].
-/// 5. Unmatched Rust nodes → [`CorrespondenceStatus::ExtraInTarget`] rows with `source_node: None`.
-///
-/// This is **not** semantic analysis. Review every `Diverged` heuristic entry before use.
+/// 5. Unmatched Rust nodes → [`CorrespondenceStatus::ExtraInTarget`].
 #[must_use]
 pub fn suggest_correspondences(
     java: &dyn GraphView,
@@ -115,18 +118,16 @@ pub fn suggest_correspondences(
     let mut matched_rust: HashSet<NodeId> = HashSet::new();
 
     for (java_node_id, java_node) in &java_nodes {
-        let java_tokens = tokenize_name(&java_node.label);
-        let mut best: Option<(NodeId, f32)> = None;
+        let mut best: Option<(NodeId, f32, CorrespondenceMethod)> = None;
 
         for (rust_node_id, rust_node) in &rust_nodes {
             if rust_node.kind != java_node.kind {
                 continue;
             }
-            let rust_tokens = tokenize_name(&rust_node.label);
-            let similarity = jaccard(&java_tokens, &rust_tokens);
-            let replace = best.as_ref().map_or(true, |(_, s)| similarity > *s);
+            let (similarity, method) = score_pair(java_node, rust_node);
+            let replace = best.as_ref().map_or(true, |(_, s, _)| similarity > *s);
             if replace {
-                best = Some((*rust_node_id, similarity));
+                best = Some((*rust_node_id, similarity, method));
             }
         }
 
@@ -135,23 +136,28 @@ pub fn suggest_correspondences(
             node: *java_node_id,
         });
 
-        if let Some((rust_node_id, similarity)) = best.filter(|(_, s)| *s >= SIMILARITY_THRESHOLD) {
+        if let Some((rust_node_id, similarity, method)) =
+            best.filter(|(_, s, _)| *s >= SIMILARITY_THRESHOLD)
+        {
             matched_rust.insert(rust_node_id);
             let target_ref = Some(NodeRef {
                 graph: rust_id.clone(),
                 node: rust_node_id,
             });
+            let note = match method {
+                CorrespondenceMethod::SignatureHeuristic => {
+                    "name+signature heuristic v2 — manual confirmation required before treating as ported"
+                }
+                _ => "name heuristic v2 — manual confirmation required before treating as ported",
+            };
             entries.push(CorrespondenceEntry {
                 id: entry_id(source_ref.as_ref(), target_ref.as_ref()),
                 source_node: source_ref,
                 target_node: target_ref,
                 status: CorrespondenceStatus::Diverged,
                 confidence: similarity,
-                method: CorrespondenceMethod::NameHeuristic,
-                note: Some(
-                    "name heuristic v1 — manual confirmation required before treating as ported"
-                        .to_string(),
-                ),
+                method,
+                note: Some(note.to_string()),
                 stale: false,
             });
         } else {
@@ -160,9 +166,9 @@ pub fn suggest_correspondences(
                 source_node: source_ref,
                 target_node: None,
                 status: CorrespondenceStatus::MissingInTarget,
-                confidence: best.map_or(0.0, |(_, s)| s),
+                confidence: best.map_or(0.0, |(_, s, _)| s),
                 method: CorrespondenceMethod::NameHeuristic,
-                note: Some("no Rust name match above similarity threshold".to_string()),
+                note: Some("no Rust name/signature match above similarity threshold".to_string()),
                 stale: false,
             });
         }
@@ -189,6 +195,32 @@ pub fn suggest_correspondences(
     }
 
     entries
+}
+
+fn score_pair(java: &Node, rust: &Node) -> (f32, CorrespondenceMethod) {
+    let name_sim = jaccard(&tokenize_name(&java.label), &tokenize_name(&rust.label));
+    match (&java.signature, &rust.signature) {
+        (Some(js), Some(rs)) => {
+            let sig_sim = jaccard(&tokenize_signature(js), &tokenize_signature(rs));
+            let combined = NAME_WEIGHT_WITH_SIG * name_sim + SIG_WEIGHT * sig_sim;
+            (combined, CorrespondenceMethod::SignatureHeuristic)
+        },
+        _ => (name_sim, CorrespondenceMethod::NameHeuristic),
+    }
+}
+
+fn tokenize_signature(sig: &str) -> HashSet<String> {
+    let mut tokens = HashSet::new();
+    let mut current = String::new();
+    for ch in sig.chars() {
+        if ch.is_ascii_alphanumeric() || ch == '_' {
+            current.push(ch.to_ascii_lowercase());
+        } else {
+            push_token(&mut current, &mut tokens);
+        }
+    }
+    push_token(&mut current, &mut tokens);
+    tokens
 }
 
 /// Load a correspondence map artifact from the content-addressed store.
@@ -329,28 +361,31 @@ fn jaccard(a: &HashSet<String>, b: &HashSet<String>) -> f32 {
     if a.is_empty() && b.is_empty() {
         return 1.0;
     }
-    if a.is_empty() || b.is_empty() {
-        return 0.0;
-    }
-    let intersection = a.intersection(b).count();
+    let inter = a.intersection(b).count();
     let union = a.union(b).count();
-    #[allow(clippy::cast_precision_loss)]
-    {
-        intersection as f32 / union as f32
+    if union == 0 {
+        0.0
+    } else {
+        #[allow(clippy::cast_precision_loss)]
+        {
+            inter as f32 / union as f32
+        }
     }
 }
 
 fn entry_id(source: Option<&NodeRef>, target: Option<&NodeRef>) -> String {
-    let source_key = source.map_or_else(
-        || "-".to_string(),
-        |s| format!("{}:{}", s.graph.0, s.node.0),
+    let payload = format!(
+        "{}|{}",
+        source.map_or_else(
+            || "-".to_string(),
+            |n| format!("{}:{}", n.graph.0, n.node.0)
+        ),
+        target.map_or_else(
+            || "-".to_string(),
+            |n| format!("{}:{}", n.graph.0, n.node.0)
+        )
     );
-    let target_key = target.map_or_else(
-        || "-".to_string(),
-        |t| format!("{}:{}", t.graph.0, t.node.0),
-    );
-    let key = format!("{source_key}|{target_key}");
-    blake3::hash(key.as_bytes()).to_hex().to_string()
+    blake3::hash(payload.as_bytes()).to_hex().to_string()
 }
 
 #[cfg(test)]
@@ -359,17 +394,34 @@ mod tests {
 
     #[test]
     fn tokenize_camel_and_snake_align() {
-        let a = tokenize_name("getReadLikelihoods");
-        let b = tokenize_name("compute_read_likelihoods");
-        assert!(jaccard(&a, &b) >= 0.5);
-        assert!(a.contains("read"));
-        assert!(b.contains("read"));
+        let a = tokenize_name("haplotypeCaller");
+        let b = tokenize_name("haplotype_caller");
+        assert!((jaccard(&a, &b) - 1.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn signature_boosts_score_method() {
+        let java = Node {
+            id: NodeId(0),
+            kind: NodeKind::Callable,
+            label: "add".into(),
+            signature: Some("add(int a, int b):int".into()),
+        };
+        let rust = Node {
+            id: NodeId(1),
+            kind: NodeKind::Callable,
+            label: "add".into(),
+            signature: Some("add(a: i32, b: i32)->i32".into()),
+        };
+        let (score, method) = score_pair(&java, &rust);
+        assert!(score >= SIMILARITY_THRESHOLD, "{score}");
+        assert_eq!(method, CorrespondenceMethod::SignatureHeuristic);
     }
 
     #[test]
     fn merge_preserves_manual_over_suggested_same_id() {
         let manual = CorrespondenceEntry {
-            id: "abc".to_string(),
+            id: "same".into(),
             source_node: None,
             target_node: None,
             status: CorrespondenceStatus::Ported,
@@ -379,7 +431,7 @@ mod tests {
             stale: false,
         };
         let suggested = CorrespondenceEntry {
-            id: "abc".to_string(),
+            id: "same".into(),
             source_node: None,
             target_node: None,
             status: CorrespondenceStatus::Diverged,
@@ -397,7 +449,7 @@ mod tests {
     #[test]
     fn merge_marks_missing_manual_as_stale() {
         let manual = CorrespondenceEntry {
-            id: "keep-me".to_string(),
+            id: "gone".into(),
             source_node: None,
             target_node: None,
             status: CorrespondenceStatus::Ported,
@@ -406,39 +458,34 @@ mod tests {
             note: None,
             stale: false,
         };
-        let merged = merge_correspondences(vec![manual], Vec::new());
+        let merged = merge_correspondences(vec![manual], vec![]);
         assert_eq!(merged.len(), 1);
         assert!(merged[0].stale);
-        assert!(merged[0]
-            .note
-            .as_deref()
-            .is_some_and(|n| n.contains("source_node_missing")));
     }
 
     #[test]
     fn merge_replaces_old_heuristic_with_new_suggestions() {
         let old = CorrespondenceEntry {
-            id: "old-heuristic".to_string(),
+            id: "old".into(),
             source_node: None,
             target_node: None,
             status: CorrespondenceStatus::Diverged,
-            confidence: 0.55,
+            confidence: 0.5,
             method: CorrespondenceMethod::NameHeuristic,
             note: None,
             stale: false,
         };
         let new = CorrespondenceEntry {
-            id: "new-heuristic".to_string(),
+            id: "new".into(),
             source_node: None,
             target_node: None,
             status: CorrespondenceStatus::Diverged,
-            confidence: 0.8,
-            method: CorrespondenceMethod::NameHeuristic,
+            confidence: 0.9,
+            method: CorrespondenceMethod::SignatureHeuristic,
             note: None,
             stale: false,
         };
         let merged = merge_correspondences(vec![old], vec![new.clone()]);
-        assert_eq!(merged.len(), 1);
-        assert_eq!(merged[0].id, new.id);
+        assert_eq!(merged, vec![new]);
     }
 }

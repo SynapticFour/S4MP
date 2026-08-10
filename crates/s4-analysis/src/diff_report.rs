@@ -2,10 +2,11 @@
 
 use crate::correspondence::{CorrespondenceEntry, CorrespondenceStatus};
 use s4_graph::{GraphView, NodeId, NodeKind};
+use serde::Serialize;
 use std::fmt::Write as _;
 
 /// Categorized correspondence diff between a Java source graph and a Rust target graph.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct DiffReport {
     /// Java-side graph alias.
     pub java_source: String,
@@ -26,7 +27,7 @@ pub struct DiffReport {
 }
 
 /// High-level metrics for a [`DiffReport`].
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct DiffSummary {
     /// Callable nodes in the Java graph.
     pub total_java_callables: usize,
@@ -42,6 +43,17 @@ pub struct DiffSummary {
     pub extra_count: usize,
     /// `ported_count / total_java_callables` (0.0 when denominator is zero).
     pub coverage_pct: f32,
+}
+
+/// Counts of diverged entries by confidence band.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct ConfidenceBands {
+    /// Confidence ≥ 0.85.
+    pub high: usize,
+    /// Confidence in `[0.65, 0.85)`.
+    pub medium: usize,
+    /// Confidence &lt; 0.65.
+    pub low: usize,
 }
 
 /// Build a categorized diff report from correspondence entries and the Java graph.
@@ -125,6 +137,12 @@ pub fn render_markdown(report: &DiffReport) -> String {
         report.java_source, report.rust_source
     );
 
+    out.push_str("> **Maturity:** `heuristic-map-v2`. ");
+    out.push_str(
+        "Name (+ optional signature) similarity maps only — not semantic equivalence, not a certificate. ",
+    );
+    out.push_str("`s4 certify` / `s4 verify` are not implemented.\n\n");
+
     out.push_str("## Summary\n\n");
     out.push_str("| Metric | Value |\n");
     out.push_str("|--------|------:|\n");
@@ -147,6 +165,14 @@ pub fn render_markdown(report: &DiffReport) -> String {
         "| Coverage (ported / callables) | {:.1}% |\n\n",
         report.summary.coverage_pct
     );
+
+    out.push_str("## Confidence bands (diverged heuristics)\n\n");
+    let bands = confidence_bands(&report.diverged);
+    out.push_str("| Band | Count |\n");
+    out.push_str("|------|------:|\n");
+    let _ = writeln!(out, "| high (≥ 0.85) | {} |", bands.high);
+    let _ = writeln!(out, "| medium (0.65–0.85) | {} |", bands.medium);
+    let _ = writeln!(out, "| low (< 0.65) | {} |\n", bands.low);
 
     out.push_str("## Fehlt im Rust-Port\n\n");
     if report.missing_in_target.is_empty() {
@@ -194,6 +220,46 @@ pub fn render_markdown(report: &DiffReport) -> String {
     }
 
     out
+}
+
+/// Render a machine-readable JSON sidecar for Showcase / CI evidence packs.
+///
+/// # Errors
+///
+/// Returns an error if JSON serialization fails.
+pub fn render_json(report: &DiffReport) -> Result<String, serde_json::Error> {
+    #[derive(Serialize)]
+    struct Envelope<'a> {
+        maturity: &'static str,
+        confidence_bands: ConfidenceBands,
+        report: &'a DiffReport,
+    }
+    let envelope = Envelope {
+        maturity: s4_core::MATURITY,
+        confidence_bands: confidence_bands(&report.diverged),
+        report,
+    };
+    serde_json::to_string_pretty(&envelope)
+}
+
+/// Bucket diverged entries by confidence for report summaries.
+#[must_use]
+pub fn confidence_bands(diverged: &[CorrespondenceEntry]) -> ConfidenceBands {
+    let mut bands = ConfidenceBands {
+        high: 0,
+        medium: 0,
+        low: 0,
+    };
+    for entry in diverged {
+        if entry.confidence >= 0.85 {
+            bands.high += 1;
+        } else if entry.confidence >= 0.65 {
+            bands.medium += 1;
+        } else {
+            bands.low += 1;
+        }
+    }
+    bands
 }
 
 fn count_java_nodes(graph: &dyn GraphView) -> (usize, usize) {
@@ -271,11 +337,13 @@ mod tests {
                     id: NodeId(0),
                     kind: NodeKind::Callable,
                     label: "alpha".to_string(),
+                    signature: None,
                 },
                 Node {
                     id: NodeId(1),
                     kind: NodeKind::Callable,
                     label: "beta".to_string(),
+                    signature: None,
                 },
             ],
             vec![],
@@ -322,6 +390,8 @@ mod tests {
 
         let md = render_markdown(&report);
         assert!(md.contains("# Diff: java -> rust"));
+        assert!(md.contains("heuristic-map-v2"));
         assert!(md.contains("## Fehlt im Rust-Port"));
+        assert!(md.contains("Confidence bands"));
     }
 }

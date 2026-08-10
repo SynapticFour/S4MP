@@ -4,6 +4,11 @@ A production-grade, modular, plugin-driven platform for software knowledge extra
 
 **The knowledge model is the product. AI is one consumer among many.**
 
+> **Maturity:** `heuristic-map-v2`
+> What ships today is a **heuristic Java↔Rust port map** (`source` → `graph` → `map` → `diff`) using name (+ optional signature) similarity.
+> It is **not** semantic equivalence, **not** a certificate, and `s4 certify` / `s4 verify` are **not implemented**.
+> Roadmap: [Implementation Roadmap](docs/guides/IMPLEMENTATION_ROADMAP.md).
+
 ## Quick Start (Porting Pipeline)
 
 The fastest way to compare a Java codebase with a Rust port and get a Markdown diff report:
@@ -151,6 +156,7 @@ See [Contributing](CONTRIBUTING.md) and [Engineering Standards](docs/engineering
 
 ### Guides
 
+- **[Implementation Roadmap](docs/guides/IMPLEMENTATION_ROADMAP.md)** — phased delivery (P0–P6)
 - **[Porting Workflow](docs/guides/PORTING_WORKFLOW.md)** — Java→Rust diff pipeline (Makefile + CLI)
 
 ### Architecture & Standards

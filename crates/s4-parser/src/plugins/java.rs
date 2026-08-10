@@ -6,10 +6,10 @@ use crate::{ParseContext, ParsePipeline, ParseUnit};
 use s4_core::{ArtifactId, Result};
 use tree_sitter::Node;
 
-/// Tree-sitter frontend for Java sources (v1 heuristic USIR extraction).
+/// Tree-sitter frontend for Java sources (heuristic USIR extraction).
 ///
-/// This is **not** a full Java compiler frontend. Call and reference edges are inferred
-/// with simple name matching inside the same file/module.
+/// Call and reference edges use simple name matching. Cross-file callees are recorded as
+/// unresolved calls for the graph linker. Signatures are captured when present on the AST.
 #[derive(Clone, Debug, Default)]
 pub struct JavaParser;
 
@@ -22,7 +22,12 @@ impl ParsePipeline for JavaParser {
     }
 }
 
-fn extract_java_module(
+/// Extract a USIR module from Java source (no store I/O).
+///
+/// # Errors
+///
+/// Returns an error if parsing fails.
+pub fn extract_java_module(
     source: &str,
     path: &str,
     source_root: &std::path::Path,
@@ -51,7 +56,8 @@ fn walk_java_node(
         },
         "method_declaration" => {
             let name = child_by_field(&node, "name", source).unwrap_or("<anonymous>");
-            let id = builder.add_callable(name);
+            let signature = java_method_signature(name, node, source);
+            let id = builder.add_callable(name, Some(signature));
             add_type_references(id, node, source, builder);
             if let Some(body) = node.child_by_field_name("body") {
                 if let Ok(body_text) = body.utf8_text(source.as_bytes()) {
@@ -61,7 +67,8 @@ fn walk_java_node(
         },
         "constructor_declaration" => {
             let name = enclosing_type.unwrap_or("constructor");
-            let id = builder.add_callable(name);
+            let signature = java_method_signature(name, node, source);
+            let id = builder.add_callable(name, Some(signature));
             add_type_references(id, node, source, builder);
             if let Some(body) = node.child_by_field_name("body") {
                 if let Ok(body_text) = body.utf8_text(source.as_bytes()) {
@@ -81,6 +88,18 @@ fn walk_java_node(
     ) {
         walk_java_children(node, source, builder, enclosing_type);
     }
+}
+
+fn java_method_signature(name: &str, node: Node<'_>, source: &str) -> String {
+    let params = node
+        .child_by_field_name("parameters")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .unwrap_or("()");
+    let ret = node
+        .child_by_field_name("type")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .unwrap_or("void");
+    format!("{name}{params}:{ret}")
 }
 
 fn walk_java_children(
@@ -164,6 +183,46 @@ class Example {
         assert!(
             has_calls_relation(&module, "caller", "callee"),
             "caller defined before callee must still produce a Calls edge after deferred resolution"
+        );
+    }
+
+    #[test]
+    fn method_signature_is_captured() {
+        let source = r"
+class Example {
+    int add(int a, int b) { return a + b; }
+}
+";
+        let source_root = std::env::temp_dir();
+        let module = extract_java_module(source, "Example.java", &source_root).unwrap();
+        let add = module
+            .entities
+            .iter()
+            .find(|e| e.name == "add")
+            .expect("add");
+        let sig = add.signature.as_deref().expect("signature");
+        assert!(sig.contains("add"), "{sig}");
+        assert!(sig.contains("int"), "{sig}");
+    }
+
+    #[test]
+    fn cross_file_call_is_unresolved() {
+        let source = r"
+class Example {
+    void caller() {
+        scale(2);
+    }
+}
+";
+        let source_root = std::env::temp_dir();
+        let module = extract_java_module(source, "Example.java", &source_root).unwrap();
+        assert!(
+            module
+                .unresolved_calls
+                .iter()
+                .any(|c| c.callee_name == "scale"),
+            "expected unresolved scale: {:?}",
+            module.unresolved_calls
         );
     }
 }

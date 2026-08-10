@@ -1,7 +1,7 @@
 # SynapticFour Method Platform (S4MP)
 ## Architecture Specification v0.1
 
-> **Status:** Approved skeleton baseline  
+> **Status:** Approved skeleton baseline
 > **Principle:** Stable contracts at the center, volatile implementations at the edge.
 
 ---
@@ -374,9 +374,10 @@ Enforced by `deny.toml` and code review.
 
 ## 14. Open Decisions
 
-1. **Plugin Phase 1:** in-process native vs WASM from day one
-2. **Schema encoding:** Protocol Buffers vs JSON Schema + CBOR
+1. ~~**Plugin Phase 1:** in-process native vs WASM from day one~~ → [ADR-015](../adr/0015-in-process-plugins-through-phase-5.md) (in-process through Phase 5)
+2. ~~**Schema encoding:** Protocol Buffers vs JSON Schema + CBOR~~ → [ADR-014](../adr/0014-json-artifact-encoding-v0.1.md) (JSON for v0.1)
 3. **Graph storage at scale:** embedded vs external vs custom over CAS
 4. **Query language:** custom S4QL vs Datalog/Cypher subset
 
 See `docs/adr/` for formal decision records as they are resolved.
+See [Implementation Roadmap](../guides/IMPLEMENTATION_ROADMAP.md) for delivery sequencing.

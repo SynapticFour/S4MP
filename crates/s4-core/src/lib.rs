@@ -12,6 +12,8 @@
 pub mod error;
 /// Content-addressed and domain identifiers.
 pub mod id;
+/// Product maturity labels for honest CLI and report surfaces.
+pub mod maturity;
 /// Common re-exports for workspace crates.
 pub mod prelude;
 /// Schema and plugin API versioning.
@@ -19,4 +21,5 @@ pub mod version;
 
 pub use error::{Result, S4Error};
 pub use id::{ArtifactId, EntityId, PluginId, ProjectId};
+pub use maturity::{MATURITY, MATURITY_NOTICE};
 pub use version::{ApiVersion, SchemaVersion};

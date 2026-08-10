@@ -21,5 +21,5 @@ pub use edge::{Edge, EdgeKind};
 pub use layer::GraphLayer;
 pub use memory::{InMemoryGraph, InMemoryGraphView};
 pub use node::{Node, NodeId, NodeKind};
-pub use query::{GraphQuery, QueryResult};
+pub use query::{FilterQuery, GraphDiff, GraphQuery, QueryExpr, QueryResult};
 pub use view::{GraphBuilder, GraphView};

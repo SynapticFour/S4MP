@@ -1,7 +1,7 @@
 //! Workspace paths, registry I/O, and shared pipeline helpers.
 
 use s4_analysis::CorrespondenceEntry;
-use s4_core::{ArtifactId, Result, S4Error, SchemaVersion};
+use s4_core::{ArtifactId, Result, S4Error, SchemaVersion, MATURITY};
 use s4_graph::memory::InMemoryGraphView;
 use s4_graph::{Edge, GraphView, Node, NodeId, NodeKind};
 use s4_parser::{LanguageId, ParseUnit, UsirModule};
@@ -22,6 +22,24 @@ pub struct Workspace {
 pub struct SourceRegistry {
     /// Registered sources keyed by alias order.
     pub sources: Vec<SourceRef>,
+}
+
+/// Workspace metadata written by `s4 init` (`.s4/workspace.json`).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WorkspaceMeta {
+    /// Artifact / USIR schema version for this workspace.
+    pub schema_version: SchemaVersion,
+    /// Product maturity label (never stronger than shipped capabilities).
+    pub maturity: String,
+}
+
+impl Default for WorkspaceMeta {
+    fn default() -> Self {
+        Self {
+            schema_version: SchemaVersion::CURRENT,
+            maturity: MATURITY.to_string(),
+        }
+    }
 }
 
 /// Manifest written by `s4 graph` under `.s4/graphs/<alias>.json`.
@@ -88,6 +106,61 @@ impl Workspace {
     #[must_use]
     pub fn root(&self) -> &Path {
         &self.root
+    }
+
+    /// Path to workspace metadata (`.s4/workspace.json`).
+    #[must_use]
+    pub fn meta_path(&self) -> PathBuf {
+        self.root.join(".s4").join("workspace.json")
+    }
+
+    /// Ensure standard `.s4/` subdirectories exist.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a directory cannot be created.
+    pub fn ensure_layout(&self) -> Result<()> {
+        for rel in [
+            ".s4",
+            ".s4/store",
+            ".s4/cache",
+            ".s4/graphs",
+            ".s4/maps",
+            ".s4/reports",
+            ".s4/exports",
+        ] {
+            let path = self.root.join(rel);
+            std::fs::create_dir_all(&path).map_err(|e| {
+                S4Error::Other(format!(
+                    "failed to create workspace directory {}: {e}",
+                    path.display()
+                ))
+            })?;
+        }
+        Ok(())
+    }
+
+    /// Load workspace metadata (defaults when missing).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file exists but cannot be parsed.
+    pub fn load_meta(&self) -> Result<WorkspaceMeta> {
+        let path = self.meta_path();
+        if !path.is_file() {
+            return Ok(WorkspaceMeta::default());
+        }
+        read_json(&path)
+    }
+
+    /// Persist workspace metadata.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if writing fails.
+    pub fn save_meta(&self, meta: &WorkspaceMeta) -> Result<()> {
+        self.ensure_layout()?;
+        write_json(&self.meta_path(), meta)
     }
 
     /// Open the file-backed artifact store.

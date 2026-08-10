@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://s4mp.dev/schemas/usir-module.schema.json",
+  "title": "S4MP USIR Module",
+  "description": "Universal Semantic IR module (schema 0.1). Stable interchange between parser frontends and graph/analysis consumers. Heuristic v1 frontends may omit optional fields.",
+  "type": "object",
+  "required": ["name", "entities", "relations"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Module name (typically a relative source path)."
+    },
+    "entities": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/entity" }
+    },
+    "relations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/relation" }
+    },
+    "unresolved_calls": {
+      "type": "array",
+      "description": "Call sites whose callee was not declared in this module (linker input).",
+      "items": { "$ref": "#/$defs/unresolved_call" }
+    }
+  },
+  "$defs": {
+    "unresolved_call": {
+      "type": "object",
+      "required": ["from", "callee_name"],
+      "additionalProperties": false,
+      "properties": {
+        "from": { "type": "integer", "minimum": 0 },
+        "callee_name": { "type": "string" }
+      }
+    },
+    "entity": {
+      "type": "object",
+      "required": ["id", "kind", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Local entity index within this module."
+        },
+        "kind": { "$ref": "#/$defs/entity_kind" },
+        "name": {
+          "type": "string",
+          "description": "Qualified or local name."
+        },
+        "signature": {
+          "type": ["string", "null"],
+          "description": "Optional callable/type signature string (Phase 1+)."
+        }
+      }
+    },
+    "entity_kind": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": ["module", "symbol", "callable", "type"]
+        },
+        {
+          "type": "object",
+          "required": ["extension"],
+          "additionalProperties": false,
+          "properties": {
+            "extension": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "relation": {
+      "type": "object",
+      "required": ["from", "to", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "from": { "type": "integer", "minimum": 0 },
+        "to": { "type": "integer", "minimum": 0 },
+        "kind": { "$ref": "#/$defs/relation_kind" }
+      }
+    },
+    "relation_kind": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": ["defines", "references", "calls", "depends_on"]
+        },
+        {
+          "type": "object",
+          "required": ["extension"],
+          "additionalProperties": false,
+          "properties": {
+            "extension": { "type": "string" }
+          }
+        }
+      ]
+    }
+  }
+}

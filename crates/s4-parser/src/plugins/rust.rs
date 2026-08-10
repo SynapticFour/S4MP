@@ -6,10 +6,10 @@ use crate::{ParseContext, ParsePipeline, ParseUnit};
 use s4_core::{ArtifactId, Result};
 use tree_sitter::Node;
 
-/// Tree-sitter frontend for Rust sources (v1 heuristic USIR extraction).
+/// Tree-sitter frontend for Rust sources (heuristic USIR extraction).
 ///
-/// Call edges use substring matching for `name(` within the same module. Reference edges
-/// map only to types declared in the same file — no `use` resolution or trait impl lookup.
+/// Call edges use substring matching for `name(` within the same module; unresolved names
+/// are linked across modules during graph lowering. Signatures are captured when present.
 #[derive(Clone, Debug, Default)]
 pub struct RustParser;
 
@@ -22,7 +22,12 @@ impl ParsePipeline for RustParser {
     }
 }
 
-fn extract_rust_module(
+/// Extract a USIR module from Rust source (no store I/O).
+///
+/// # Errors
+///
+/// Returns an error if parsing fails.
+pub fn extract_rust_module(
     source: &str,
     path: &str,
     source_root: &std::path::Path,
@@ -44,7 +49,8 @@ fn walk_rust_node(node: Node<'_>, source: &str, builder: &mut UsirModuleBuilder)
         },
         "function_item" => {
             if let Some(name) = child_by_field(&node, "name", source) {
-                let id = builder.add_callable(name);
+                let signature = rust_fn_signature(name, node, source);
+                let id = builder.add_callable(name, Some(signature));
                 add_type_references(id, node, source, builder);
                 if let Some(body) = node.child_by_field_name("body") {
                     if let Ok(body_text) = body.utf8_text(source.as_bytes()) {
@@ -70,6 +76,18 @@ fn walk_rust_node(node: Node<'_>, source: &str, builder: &mut UsirModuleBuilder)
             }
         }
     }
+}
+
+fn rust_fn_signature(name: &str, node: Node<'_>, source: &str) -> String {
+    let params = node
+        .child_by_field_name("parameters")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .unwrap_or("()");
+    let ret = node
+        .child_by_field_name("return_type")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .unwrap_or("()");
+    format!("{name}{params}->{ret}")
 }
 
 fn add_type_references(from: u64, node: Node<'_>, source: &str, builder: &mut UsirModuleBuilder) {
@@ -117,5 +135,22 @@ fn callee() {}
             has_calls_relation(&module, "caller", "callee"),
             "caller defined before callee must still produce a Calls edge after deferred resolution"
         );
+    }
+
+    #[test]
+    fn function_signature_is_captured() {
+        let source = r"
+fn add(a: i32, b: i32) -> i32 { a + b }
+";
+        let source_root = std::env::temp_dir();
+        let module = extract_rust_module(source, "example.rs", &source_root).unwrap();
+        let add = module
+            .entities
+            .iter()
+            .find(|e| e.name == "add")
+            .expect("add");
+        let sig = add.signature.as_deref().expect("signature");
+        assert!(sig.contains("add"), "{sig}");
+        assert!(sig.contains("i32"), "{sig}");
     }
 }

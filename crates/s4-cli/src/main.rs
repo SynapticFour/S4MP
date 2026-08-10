@@ -5,12 +5,23 @@ mod graph_export;
 mod workspace;
 
 use clap::{Parser, Subcommand};
-use commands::{analyze, certify, diff, graph, init, map, query, source, verify};
+use commands::{
+    analyze, certify, diff, graph, init, knowledge, map, query, require, source, verify,
+};
 use s4_core::Result;
 
 /// `SynapticFour` Method Platform CLI.
 #[derive(Parser)]
-#[command(name = "s4", version, about = "SynapticFour Method Platform")]
+#[command(
+    name = "s4",
+    version,
+    about = "SynapticFour Method Platform — heuristic Java↔Rust port maps (not certification)",
+    long_about = "SynapticFour Method Platform (S4MP).\n\n\
+Shipped today: init, source, graph, map, diff, analyze, query, require, knowledge, verify, certify.\n\
+Honesty: certify evaluates verification-run policy only — not semantic equivalence.\n\n\
+Maturity: heuristic-map-v2. Name (+ optional signature) similarity maps only — not semantic \
+equivalence, not a certificate. `s4 certify` / `s4 verify` are not implemented."
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -18,27 +29,65 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Initialize a new S4MP workspace.
+    /// Initialize a new S4MP workspace (`.s4/` layout + metadata).
     Init {
         /// Target directory.
         #[arg(default_value = ".")]
         path: String,
     },
-    /// Run the analysis pipeline.
-    Analyze,
-    /// Query the knowledge graph.
+    /// Run the porting analysis pipeline (graph → map → diff).
+    Analyze {
+        /// Optional Java source alias (default: first registered Java source).
+        #[arg(long)]
+        java: Option<String>,
+        /// Optional Rust source alias (default: first registered Rust source).
+        #[arg(long)]
+        rust: Option<String>,
+        /// Diff report output path.
+        #[arg(long, default_value = ".s4/reports/diff-report.md")]
+        out: String,
+    },
+    /// Query a built source graph (`all` | `kind:callable` | `label~substr`).
     Query {
+        /// Source alias (must have `graph build`).
+        #[arg(long)]
+        source: String,
         /// Query expression.
         #[arg(long, default_value = "all")]
         expr: String,
+        /// Also print basic graph metrics.
+        #[arg(long, default_value_t = false)]
+        metrics: bool,
     },
-    /// Run verification against invariants.
-    Verify,
-    /// Evaluate certification policy.
+    /// Run verification against porting/requirements thresholds.
+    Verify {
+        /// Java source alias.
+        #[arg(long)]
+        java: String,
+        /// Rust source alias.
+        #[arg(long)]
+        rust: String,
+        /// Minimum ported coverage percent (default 0 = always pass coverage).
+        #[arg(long, default_value_t = 0.0)]
+        min_coverage: f32,
+        /// Fail when `MissingInTarget` rows remain.
+        #[arg(long, default_value_t = false)]
+        forbid_missing: bool,
+        /// Fail when requirements exist without `ImplementedBy` traces.
+        #[arg(long, default_value_t = false)]
+        require_traced: bool,
+    },
+    /// Evaluate certification policy over a verification run.
     Certify {
-        /// Policy name.
+        /// Policy name (`default`).
         #[arg(long, default_value = "default")]
         policy: String,
+        /// Java source alias (selects verification run file).
+        #[arg(long)]
+        java: String,
+        /// Rust source alias.
+        #[arg(long)]
+        rust: String,
     },
     /// Register and manage source trees.
     Source {
@@ -67,6 +116,54 @@ enum Commands {
         #[arg(long, default_value = ".s4/reports/diff-report.md")]
         out: String,
     },
+    /// Requirements CRUD, `OpenAPI` import, and traces.
+    Require {
+        #[command(subcommand)]
+        action: RequireAction,
+    },
+    /// Software knowledge graph helpers.
+    Knowledge {
+        #[command(subcommand)]
+        action: KnowledgeAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum RequireAction {
+    /// Add a requirement.
+    Add {
+        /// Requirement statement.
+        statement: String,
+        /// Kind: `functional` | `non_functional` | `constraint` | `test`.
+        #[arg(long, default_value = "functional")]
+        kind: String,
+    },
+    /// List requirements and traces.
+    List,
+    /// Import `OpenAPI` path keys as functional requirements.
+    ImportOpenapi {
+        /// Path to `OpenAPI` JSON document.
+        path: String,
+    },
+    /// Suggest (and optionally apply) name-based requirement→callable traces.
+    TraceSuggest {
+        /// Built source alias.
+        #[arg(long)]
+        source: String,
+        /// Persist suggestions.
+        #[arg(long, default_value_t = false)]
+        apply: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum KnowledgeAction {
+    /// Extract naming concepts from a built graph.
+    Extract {
+        /// Built source alias.
+        #[arg(long)]
+        source: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -94,6 +191,15 @@ enum GraphAction {
         /// Output file path.
         #[arg(long, short = 'o', default_value = ".s4/exports/graph")]
         out: String,
+    },
+    /// Diff two built graphs by `(kind, label)` identity.
+    Diff {
+        /// Left / baseline source alias.
+        #[arg(long)]
+        left: String,
+        /// Right / candidate source alias.
+        #[arg(long)]
+        right: String,
     },
 }
 
@@ -166,10 +272,22 @@ fn main() {
 fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Commands::Init { path } => init::run(&path),
-        Commands::Analyze => analyze::run(),
-        Commands::Query { expr } => query::run(&expr),
-        Commands::Verify => verify::run(),
-        Commands::Certify { policy } => certify::run(&policy),
+        Commands::Analyze { java, rust, out } => {
+            analyze::run(java.as_deref(), rust.as_deref(), &out)
+        },
+        Commands::Query {
+            source,
+            expr,
+            metrics,
+        } => query::run(&source, &expr, metrics),
+        Commands::Verify {
+            java,
+            rust,
+            min_coverage,
+            forbid_missing,
+            require_traced,
+        } => verify::run(&java, &rust, min_coverage, forbid_missing, require_traced),
+        Commands::Certify { policy, java, rust } => certify::run(&policy, &java, &rust),
         Commands::Source { action } => match action {
             SourceAction::Add {
                 alias,
@@ -196,6 +314,7 @@ fn run(cli: Cli) -> Result<()> {
                 filter,
                 out,
             } => graph::run_export(&source, &format, &filter, &out),
+            GraphAction::Diff { left, right } => graph::run_diff(&left, &right),
         },
         Commands::Map { action } => match action {
             MapAction::Suggest { java, rust } => map::run_suggest(&java, &rust),
@@ -204,5 +323,16 @@ fn run(cli: Cli) -> Result<()> {
             MapAction::List => map::run_list(),
         },
         Commands::Diff { java, rust, out } => diff::run(&java, &rust, &out),
+        Commands::Require { action } => match action {
+            RequireAction::Add { statement, kind } => require::run_add(&kind, &statement),
+            RequireAction::List => require::run_list(),
+            RequireAction::ImportOpenapi { path } => require::run_import_openapi(&path),
+            RequireAction::TraceSuggest { source, apply } => {
+                require::run_trace_suggest(&source, apply)
+            },
+        },
+        Commands::Knowledge { action } => match action {
+            KnowledgeAction::Extract { source } => knowledge::run_extract(&source),
+        },
     }
 }

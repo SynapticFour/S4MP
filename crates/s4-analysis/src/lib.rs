@@ -16,6 +16,8 @@ pub mod feature;
 pub mod finding;
 /// USIR to graph lowering.
 pub mod lowering;
+/// Ordered pass pipeline (ADR-013).
+pub mod pass;
 /// Analysis pipeline trait.
 pub mod pipeline;
 
@@ -25,8 +27,12 @@ pub use correspondence::{
     suggest_correspondences, CorrespondenceEntry, CorrespondenceMethod, CorrespondenceStatus,
     GraphId, NodeRef,
 };
-pub use diff_report::{build_diff_report, render_markdown, DiffReport, DiffSummary};
+pub use diff_report::{
+    build_diff_report, confidence_bands, render_json, render_markdown, ConfidenceBands, DiffReport,
+    DiffSummary,
+};
 pub use feature::{Feature, FeatureExtractor, FeatureId};
 pub use finding::{Finding, FindingId, Severity};
 pub use lowering::usir_to_graph;
+pub use pass::{Pass, PassContext, PassOutcome, PassPipeline, PORTING_PASS_ORDER};
 pub use pipeline::AnalysisPipeline;

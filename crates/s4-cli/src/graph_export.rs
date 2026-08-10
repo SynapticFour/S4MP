@@ -273,16 +273,19 @@ mod tests {
                     id: NodeId(0),
                     kind: NodeKind::Module,
                     label: "lib.rs".to_string(),
+                    signature: None,
                 },
                 Node {
                     id: NodeId(1),
                     kind: NodeKind::Callable,
                     label: "run".to_string(),
+                    signature: None,
                 },
                 Node {
                     id: NodeId(2),
                     kind: NodeKind::Callable,
                     label: "helper".to_string(),
+                    signature: None,
                 },
             ],
             edges: vec![

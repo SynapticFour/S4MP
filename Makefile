@@ -11,10 +11,14 @@ GRAPH_FILTER ?= callable,calls,type,defines
 
 .PHONY: sources graph-java graph-rust graph map diff \
         graph-export graph-export-java graph-export-rust graph-export-svg \
-        open-report install-hooks clean-cache
+        open-report install-hooks clean-cache e2e-fixture
 
 install-hooks:
 	@bash scripts/install-hooks.sh
+
+## Fixture e2e (no network): mini Java/Rust trees → diff report.
+e2e-fixture:
+	cargo test -p s4-cli --test e2e_mini_port -- --nocapture
 
 sources:
 	cargo run -p s4-cli -- source add $(JAVA_ALIAS) --git $(JAVA_GIT) --subpath $(JAVA_SUBPATH) --lang java
