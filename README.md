@@ -9,6 +9,8 @@ A production-grade, modular, plugin-driven platform for software knowledge extra
 > It is **not** semantic equivalence. `s4 verify` / `s4 certify` evaluate coverage/policy thresholds only; `s4 reason` outputs stay **Proposed**.
 > Roadmap: [Implementation Roadmap](docs/guides/IMPLEMENTATION_ROADMAP.md).
 
+**Maintenance budget:** fenced satellite (org L6). Monthly CI/audit hygiene only unless a named conversation needs it.
+
 ## Quick Start (Porting Pipeline)
 
 The fastest way to compare a Java codebase with a Rust port and get a Markdown diff report:

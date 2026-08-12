@@ -1,5 +1,6 @@
 # S4MP CI — everyday thorough checks; MSRV reserved for weekly schedule.
 # See docs/engineering/ENGINEERING_STANDARDS.md §18
+# One rust compile job (fmt is cheap/parallel; deny/tiers need no cargo build).
 name: CI
 
 on:
@@ -33,8 +34,8 @@ jobs:
           components: rustfmt
       - run: cargo fmt --all --check
 
-  clippy:
-    name: clippy
+  rust:
+    name: clippy-test-doc
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -43,33 +44,11 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --workspace --all-targets -- -D warnings
-
-  check:
-    name: check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo check --workspace
-
-  test:
-    name: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace
-
-  e2e-fixture:
-    name: e2e-fixture
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
       - run: cargo test -p s4-cli --test e2e_mini_port
+      - run: cargo doc --workspace --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
 
   tiers:
     name: dependency-tiers
@@ -77,17 +56,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - run: bash scripts/check-tiers.sh
-
-  doc:
-    name: doc
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo doc --workspace --no-deps
-        env:
-          RUSTDOCFLAGS: -D warnings
 
   deny:
     name: cargo-deny
