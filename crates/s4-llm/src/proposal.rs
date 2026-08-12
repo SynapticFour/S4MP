@@ -37,7 +37,7 @@ impl Proposal {
     }
 }
 
-/// Lifecycle of an LLM proposal. Providers may only emit [`Proposed`].
+/// Lifecycle of an LLM proposal. Providers may only emit [`ProposalLifecycle::Proposed`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProposalLifecycle {
