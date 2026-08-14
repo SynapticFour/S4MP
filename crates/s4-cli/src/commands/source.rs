@@ -11,13 +11,14 @@ pub fn run_add(
     git_ref: Option<&str>,
     subpath: Option<&str>,
     lang: &str,
+    refresh: bool,
 ) -> Result<()> {
     let ws = Workspace::open(".")?;
     let source = source_ref_from_flags(alias, git, local, git_ref, subpath, lang)?;
 
     let mut registry = ws.load_sources()?;
     if registry.sources.iter().any(|s| s.alias == alias) {
-        return Err(s4_core::S4Error::Other(format!(
+        return Err(s4_core::S4Error::InvalidInput(format!(
             "source alias already registered: {alias}"
         )));
     }
@@ -31,7 +32,7 @@ pub fn run_add(
         },
     }
 
-    let ingestor = DefaultSourceIngestor::new(ws.root().to_path_buf());
+    let ingestor = DefaultSourceIngestor::new(ws.root().to_path_buf()).with_refresh(refresh);
     let resolved = ingestor.resolve(&source)?;
     println!(
         "Resolved {alias} -> {} ({} files ready for graph build)",

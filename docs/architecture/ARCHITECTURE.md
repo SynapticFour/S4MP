@@ -154,17 +154,18 @@ All inter-crate and inter-plugin communication crosses the store.
 
 | Crate | Responsibility |
 |-------|----------------|
-| `s4-planner` | Refactoring plan contracts |
 | `s4-verification` | Invariants, verifiers, acceptance workflows |
 | `s4-certification` | Certificates, policies, issuer trait |
+
+Parked (not default workspace members): `s4-planner`.
 
 ### Tier 4 — Surfaces
 
 | Crate | Responsibility |
 |-------|----------------|
 | `s4-cli` | `s4` command-line interface |
-| `s4-api` | HTTP/gRPC API contracts |
-| `s4-ui` | Headless UI bridge for IDE/web frontends |
+
+Parked (not default workspace members): `s4-api`, `s4-ui`.
 
 ---
 

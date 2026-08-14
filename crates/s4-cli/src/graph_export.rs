@@ -36,7 +36,7 @@ impl GraphExportFormat {
         match value.to_ascii_lowercase().as_str() {
             "dot" => Ok(Self::Dot),
             "json" => Ok(Self::Json),
-            other => Err(S4Error::Other(format!(
+            other => Err(S4Error::InvalidInput(format!(
                 "unsupported export format '{other}' (expected 'dot' or 'json')"
             ))),
         }
@@ -195,7 +195,7 @@ fn render_json(
         "edges": filtered_edges,
     });
     serde_json::to_string_pretty(&export)
-        .map_err(|e| S4Error::Other(format!("failed to serialize graph export JSON: {e}")))
+        .map_err(|e| S4Error::Storage(format!("failed to serialize graph export JSON: {e}")))
 }
 
 fn node_kind_token(kind: &NodeKind) -> &str {

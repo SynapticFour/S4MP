@@ -1,8 +1,8 @@
 //! Requirements CRUD, `OpenAPI` import, and name-based trace suggestions.
 
 use crate::workspace::{load_graph_from_store, Workspace};
-use s4_core::{EntityId, Result, S4Error};
-use s4_graph::{GraphView, NodeId, NodeKind};
+use s4_core::{Result, S4Error};
+use s4_graph::{GraphView, NodeKind};
 use s4_requirements::{RequirementKind, RequirementsDocument, TraceLinkKind, TraceabilityGraph};
 use std::path::PathBuf;
 
@@ -32,7 +32,7 @@ pub fn run_list() -> Result<()> {
     for req in doc.requirements.values() {
         println!("  [{}] {:?} — {}", req.id.0, req.kind, req.statement);
         for link in doc.traces_from(req.id)? {
-            println!("    trace {:?} → entity {}", link.kind, link.target.0);
+            println!("    trace {:?} → entity {}", link.kind, link.target);
         }
     }
     Ok(())
@@ -60,20 +60,18 @@ pub fn run_trace_suggest(source: &str, apply: bool) -> Result<()> {
     let graph = load_graph_from_store(&store, &manifest.graph_artifact_id)?;
 
     let mut callables = Vec::new();
-    for index in 0..graph.node_count() as u64 {
-        if let Some(node) = graph.node(NodeId(index)) {
-            if node.kind == NodeKind::Callable {
-                callables.push((EntityId(node.id.0), node.label.clone()));
-            }
+    for node in graph.nodes() {
+        if node.kind == NodeKind::Callable {
+            callables.push((node.id.as_entity_id(source), node.label.clone()));
         }
     }
 
     let suggestions = doc.suggest_traces_by_name(&callables);
     println!("suggested traces: {}", suggestions.len());
     for (req, entity, label) in &suggestions {
-        println!("  req {} ↔ {label} (entity {})", req.0, entity.0);
+        println!("  req {} ↔ {label} (entity {entity})", req.0);
         if apply {
-            doc.add_trace(*req, *entity, TraceLinkKind::ImplementedBy)?;
+            doc.add_trace(*req, entity.clone(), TraceLinkKind::ImplementedBy)?;
         }
     }
     if apply {
@@ -95,7 +93,7 @@ fn parse_kind(kind: &str) -> Result<RequirementKind> {
         "non_functional" | "nfr" => Ok(RequirementKind::NonFunctional),
         "constraint" => Ok(RequirementKind::Constraint),
         "test" => Ok(RequirementKind::Test),
-        other => Err(S4Error::Other(format!(
+        other => Err(S4Error::InvalidInput(format!(
             "unknown requirement kind '{other}' (functional|non_functional|constraint|test)"
         ))),
     }

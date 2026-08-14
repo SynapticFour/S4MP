@@ -3,12 +3,15 @@
 use s4_analysis::CorrespondenceEntry;
 use s4_core::{ArtifactId, Result, S4Error, SchemaVersion, MATURITY};
 use s4_graph::memory::InMemoryGraphView;
-use s4_graph::{Edge, GraphView, Node, NodeId, NodeKind};
-use s4_parser::{LanguageId, ParseUnit, UsirModule};
-use s4_project::{SourceOrigin, SourceRef};
+use s4_graph::{Edge, GraphView, Node, NodeKind};
+use s4_parser::{LanguageId, ParseUnit};
+use s4_project::{
+    should_skip_snapshot_path, validate_git_subpath, validate_source_alias, SourceOrigin, SourceRef,
+};
 use s4_storage::{Artifact, ArtifactKind, FileSystemStore, StoreReader, StoreWriter};
 use serde::{Deserialize, Serialize};
-use std::path::{Component, Path, PathBuf};
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 /// Workspace root (typically the current directory).
@@ -94,7 +97,7 @@ impl Workspace {
     pub fn open(root: impl Into<PathBuf>) -> Result<Self> {
         let root = root.into();
         std::fs::create_dir_all(root.join(".s4")).map_err(|e| {
-            S4Error::Other(format!(
+            S4Error::Storage(format!(
                 "failed to create workspace directory {}: {e}",
                 root.join(".s4").display()
             ))
@@ -128,10 +131,14 @@ impl Workspace {
             ".s4/maps",
             ".s4/reports",
             ".s4/exports",
+            ".s4/verification",
+            ".s4/certificates",
+            ".s4/knowledge",
+            ".s4/proposals",
         ] {
             let path = self.root.join(rel);
             std::fs::create_dir_all(&path).map_err(|e| {
-                S4Error::Other(format!(
+                S4Error::Storage(format!(
                     "failed to create workspace directory {}: {e}",
                     path.display()
                 ))
@@ -213,9 +220,9 @@ impl Workspace {
             return Ok(SourceRegistry::default());
         }
         let bytes = std::fs::read(&path)
-            .map_err(|e| S4Error::Other(format!("failed to read {}: {e}", path.display())))?;
+            .map_err(|e| S4Error::Storage(format!("failed to read {}: {e}", path.display())))?;
         serde_json::from_slice(&bytes)
-            .map_err(|e| S4Error::Other(format!("failed to parse {}: {e}", path.display())))
+            .map_err(|e| S4Error::Storage(format!("failed to parse {}: {e}", path.display())))
     }
 
     /// Persist the source registry.
@@ -227,16 +234,16 @@ impl Workspace {
         let path = self.sources_path();
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| {
-                S4Error::Other(format!(
+                S4Error::Storage(format!(
                     "failed to create sources directory {}: {e}",
                     parent.display()
                 ))
             })?;
         }
         let bytes = serde_json::to_vec_pretty(registry)
-            .map_err(|e| S4Error::Other(format!("failed to serialize source registry: {e}")))?;
+            .map_err(|e| S4Error::Storage(format!("failed to serialize source registry: {e}")))?;
         std::fs::write(&path, bytes)
-            .map_err(|e| S4Error::Other(format!("failed to write {}: {e}", path.display())))
+            .map_err(|e| S4Error::Storage(format!("failed to write {}: {e}", path.display())))
     }
 
     /// Look up a registered source by alias.
@@ -250,7 +257,7 @@ impl Workspace {
             .sources
             .into_iter()
             .find(|s| s.alias == alias)
-            .ok_or_else(|| S4Error::Other(format!("unknown source alias: {alias}")))
+            .ok_or_else(|| S4Error::InvalidInput(format!("unknown source alias: {alias}")))
     }
 
     /// Load a graph manifest for `alias`.
@@ -261,7 +268,7 @@ impl Workspace {
     pub fn load_graph_manifest(&self, alias: &str) -> Result<GraphManifest> {
         let path = self.graph_manifest_path(alias);
         read_json(&path).map_err(|e| {
-            S4Error::Other(format!(
+            S4Error::Storage(format!(
                 "graph manifest for '{alias}' not found ({}): {e}",
                 path.display()
             ))
@@ -275,7 +282,7 @@ impl Workspace {
     /// Returns an error if writing fails.
     pub fn save_graph_manifest(&self, manifest: &GraphManifest) -> Result<()> {
         std::fs::create_dir_all(self.graphs_dir()).map_err(|e| {
-            S4Error::Other(format!(
+            S4Error::Storage(format!(
                 "failed to create graphs directory {}: {e}",
                 self.graphs_dir().display()
             ))
@@ -291,7 +298,7 @@ impl Workspace {
     pub fn load_map_manifest(&self, java: &str, rust: &str) -> Result<MapManifest> {
         let path = self.map_manifest_path(java, rust);
         read_json(&path).map_err(|e| {
-            S4Error::Other(format!(
+            S4Error::Storage(format!(
                 "correspondence map for '{java}' -> '{rust}' not found ({}): {e}",
                 path.display()
             ))
@@ -305,7 +312,7 @@ impl Workspace {
     /// Returns an error if writing fails.
     pub fn save_map_manifest(&self, manifest: &MapManifest) -> Result<()> {
         std::fs::create_dir_all(self.maps_dir()).map_err(|e| {
-            S4Error::Other(format!(
+            S4Error::Storage(format!(
                 "failed to create maps directory {}: {e}",
                 self.maps_dir().display()
             ))
@@ -328,13 +335,14 @@ impl Workspace {
         }
         let mut manifests: Vec<MapManifest> = Vec::new();
         for entry in std::fs::read_dir(&dir).map_err(|e| {
-            S4Error::Other(format!(
+            S4Error::Storage(format!(
                 "failed to read maps directory {}: {e}",
                 dir.display()
             ))
         })? {
-            let entry = entry
-                .map_err(|e| S4Error::Other(format!("failed to read maps directory entry: {e}")))?;
+            let entry = entry.map_err(|e| {
+                S4Error::Storage(format!("failed to read maps directory entry: {e}"))
+            })?;
             let path = entry.path();
             if path.extension().is_some_and(|ext| ext == "json") {
                 manifests.push(read_json(&path)?);
@@ -356,7 +364,7 @@ pub fn parse_language(lang: &str) -> Result<LanguageId> {
     match lang.to_ascii_lowercase().as_str() {
         "java" => Ok(LanguageId("java".to_string())),
         "rust" => Ok(LanguageId("rust".to_string())),
-        other => Err(S4Error::Other(format!(
+        other => Err(S4Error::InvalidInput(format!(
             "unsupported language '{other}' (expected 'java' or 'rust')"
         ))),
     }
@@ -376,6 +384,10 @@ pub fn source_ref_from_flags(
     lang: &str,
 ) -> Result<SourceRef> {
     let language = parse_language(lang)?;
+    validate_source_alias(alias)?;
+    if let Some(sub) = subpath {
+        validate_git_subpath(sub)?;
+    }
     let origin = match (git, local) {
         (Some(url), None) => SourceOrigin::Git {
             url: url.to_string(),
@@ -386,12 +398,12 @@ pub fn source_ref_from_flags(
             path: PathBuf::from(path),
         },
         (Some(_), Some(_)) => {
-            return Err(S4Error::Other(
+            return Err(S4Error::InvalidInput(
                 "specify either --git or --local, not both".to_string(),
             ));
         },
         (None, None) => {
-            return Err(S4Error::Other(
+            return Err(S4Error::InvalidInput(
                 "one of --git or --local is required".to_string(),
             ));
         },
@@ -404,12 +416,19 @@ pub fn source_ref_from_flags(
 }
 
 /// Discover parseable source files under `root` for `language`.
-pub fn discover_parse_units(root: &Path, language: &LanguageId) -> Result<Vec<ParseUnit>> {
+///
+/// When `hashes` contains a snapshot-relative unix path, the matching unit
+/// carries `source_hash` so the parser can reuse cached USIR artifacts.
+pub fn discover_parse_units(
+    root: &Path,
+    language: &LanguageId,
+    hashes: &HashMap<String, String>,
+) -> Result<Vec<ParseUnit>> {
     let extension = match language.0.as_str() {
         "java" => "java",
         "rust" => "rs",
         other => {
-            return Err(S4Error::Other(format!(
+            return Err(S4Error::InvalidInput(format!(
                 "no file extension mapping for language '{other}'"
             )));
         },
@@ -419,20 +438,28 @@ pub fn discover_parse_units(root: &Path, language: &LanguageId) -> Result<Vec<Pa
     for entry in WalkDir::new(root)
         .follow_links(false)
         .into_iter()
-        .filter_entry(|e| !should_skip_entry(e.path()))
+        .filter_entry(|e| !should_skip_snapshot_path(e.path()))
     {
-        let entry =
-            entry.map_err(|e| S4Error::Other(format!("failed to walk {}: {e}", root.display())))?;
+        let entry = entry
+            .map_err(|e| S4Error::Storage(format!("failed to walk {}: {e}", root.display())))?;
         if !entry.file_type().is_file() {
             continue;
         }
         let path = entry.path();
         if path.extension().is_some_and(|ext| ext == extension) {
+            let relative = path.strip_prefix(root).ok().map(|p| {
+                p.components()
+                    .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                    .collect::<Vec<_>>()
+                    .join("/")
+            });
+            let source_hash = relative.and_then(|rel| hashes.get(&rel).cloned());
             units.push(ParseUnit {
                 path: path.to_string_lossy().into_owned(),
                 language: language.clone(),
                 content: None,
                 source_text: None,
+                source_hash,
             });
         }
     }
@@ -443,24 +470,17 @@ pub fn discover_parse_units(root: &Path, language: &LanguageId) -> Result<Vec<Pa
 /// Serialize a [`GraphView`] into a storable payload.
 #[must_use]
 pub fn graph_to_payload(source_alias: &str, graph: &dyn GraphView) -> GraphProjectionPayload {
-    let mut nodes = Vec::new();
-    for index in 0..graph.node_count() as u64 {
-        if let Some(node) = graph.node(NodeId(index)) {
-            nodes.push(node.clone());
-        }
-    }
-    let edges: Vec<Edge> = graph.edges().map(|e| (*e).clone()).collect();
     GraphProjectionPayload {
         source_alias: source_alias.to_string(),
-        nodes,
-        edges,
+        nodes: graph.nodes().cloned().collect(),
+        edges: graph.edges().cloned().collect(),
     }
 }
 
 /// Reconstruct an in-memory graph view from a payload.
 #[must_use]
-pub fn graph_from_payload(payload: &GraphProjectionPayload) -> InMemoryGraphView {
-    InMemoryGraphView::new(payload.nodes.clone(), payload.edges.clone())
+pub fn graph_from_payload(payload: GraphProjectionPayload) -> InMemoryGraphView {
+    InMemoryGraphView::new(payload.nodes, payload.edges)
 }
 
 /// Persist a graph projection artifact.
@@ -475,7 +495,7 @@ pub fn save_graph_projection(
 ) -> Result<ArtifactId> {
     let payload = graph_to_payload(source_alias, graph);
     let value = serde_json::to_value(&payload)
-        .map_err(|e| S4Error::Other(format!("failed to serialize graph projection: {e}")))?;
+        .map_err(|e| S4Error::Storage(format!("failed to serialize graph projection: {e}")))?;
     let artifact = Artifact {
         kind: ArtifactKind::GraphProjection,
         schema_version: SchemaVersion::CURRENT,
@@ -493,53 +513,22 @@ pub fn load_graph_from_store(store: &dyn StoreReader, id: &str) -> Result<InMemo
     let artifact_id = parse_artifact_id(id)?;
     let artifact = store
         .read(&artifact_id)?
-        .ok_or_else(|| S4Error::Other(format!("graph artifact not found: {id}")))?;
+        .ok_or_else(|| S4Error::Storage(format!("graph artifact not found: {id}")))?;
+    artifact.expect_current_schema()?;
     if artifact.kind != ArtifactKind::GraphProjection {
-        return Err(S4Error::Other(format!(
+        return Err(S4Error::Storage(format!(
             "expected graph_projection artifact, got {:?}",
             artifact.kind
         )));
     }
     let payload: GraphProjectionPayload = serde_json::from_value(artifact.payload)
-        .map_err(|e| S4Error::Other(format!("failed to deserialize graph projection: {e}")))?;
-    Ok(graph_from_payload(&payload))
-}
-
-/// Load USIR modules referenced by artifact ids.
-///
-/// # Errors
-///
-/// Returns an error if any module artifact is missing or invalid.
-pub fn load_usir_modules(store: &dyn StoreReader, ids: &[ArtifactId]) -> Result<Vec<UsirModule>> {
-    let mut modules = Vec::with_capacity(ids.len());
-    for id in ids {
-        let artifact = store
-            .read(id)?
-            .ok_or_else(|| S4Error::Other(format!("USIR module artifact not found: {id}")))?;
-        if artifact.kind != ArtifactKind::UsirModule {
-            return Err(S4Error::Other(format!(
-                "expected usir_module artifact, got {:?}",
-                artifact.kind
-            )));
-        }
-        let module: UsirModule = serde_json::from_value(artifact.payload)
-            .map_err(|e| S4Error::Other(format!("failed to deserialize USIR module: {e}")))?;
-        modules.push(module);
-    }
-    Ok(modules)
+        .map_err(|e| S4Error::Storage(format!("failed to deserialize graph projection: {e}")))?;
+    Ok(graph_from_payload(payload))
 }
 
 /// Count nodes of a given kind in a graph view.
 pub fn count_nodes(graph: &dyn GraphView, kind: &NodeKind) -> usize {
-    let mut count = 0_usize;
-    for index in 0..graph.node_count() as u64 {
-        if let Some(node) = graph.node(NodeId(index)) {
-            if &node.kind == kind {
-                count += 1;
-            }
-        }
-    }
-    count
+    graph.nodes().filter(|node| &node.kind == kind).count()
 }
 
 /// Parse a hex artifact id string.
@@ -548,8 +537,7 @@ pub fn count_nodes(graph: &dyn GraphView, kind: &NodeKind) -> usize {
 ///
 /// Returns an error when the string is not 64 hex characters.
 pub fn parse_artifact_id(id: &str) -> Result<ArtifactId> {
-    let bytes = hex_to_bytes(id)?;
-    Ok(ArtifactId::from_bytes(bytes))
+    id.parse()
 }
 
 /// Load correspondence entries from a map manifest artifact id.
@@ -565,63 +553,24 @@ pub fn load_correspondence_entries(
     s4_analysis::load_correspondence_map(store, &id)
 }
 
-const SKIP_DIR_NAMES: &[&str] = &[".git", "target", "node_modules"];
-
-fn should_skip_entry(path: &Path) -> bool {
-    let components: Vec<_> = path.components().collect();
-    for (i, component) in components.iter().enumerate() {
-        if let Component::Normal(name) = component {
-            let name = name.to_str().unwrap_or("");
-            if name == ".s4" {
-                // Workspace metadata under `.s4/` — but not git source caches (`.s4/cache/`).
-                let next_is_cache =
-                    components.get(i + 1).and_then(|c| c.as_os_str().to_str()) == Some("cache");
-                if !next_is_cache {
-                    return true;
-                }
-            } else if SKIP_DIR_NAMES.contains(&name) {
-                return true;
-            }
-        }
-    }
-    false
-}
-
 fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T> {
     let bytes = std::fs::read(path)
-        .map_err(|e| S4Error::Other(format!("failed to read {}: {e}", path.display())))?;
+        .map_err(|e| S4Error::Storage(format!("failed to read {}: {e}", path.display())))?;
     serde_json::from_slice(&bytes)
-        .map_err(|e| S4Error::Other(format!("failed to parse {}: {e}", path.display())))
+        .map_err(|e| S4Error::Storage(format!("failed to parse {}: {e}", path.display())))
 }
 
 fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| {
-            S4Error::Other(format!(
+            S4Error::Storage(format!(
                 "failed to create directory {}: {e}",
                 parent.display()
             ))
         })?;
     }
     let bytes = serde_json::to_vec_pretty(value)
-        .map_err(|e| S4Error::Other(format!("failed to serialize {}: {e}", path.display())))?;
+        .map_err(|e| S4Error::Storage(format!("failed to serialize {}: {e}", path.display())))?;
     std::fs::write(path, bytes)
-        .map_err(|e| S4Error::Other(format!("failed to write {}: {e}", path.display())))
-}
-
-fn hex_to_bytes(hex: &str) -> Result<[u8; 32]> {
-    if hex.len() != 64 {
-        return Err(S4Error::Other(format!(
-            "artifact id must be 64 hex characters, got {}",
-            hex.len()
-        )));
-    }
-    let mut out = [0_u8; 32];
-    for (index, chunk) in hex.as_bytes().chunks(2).enumerate() {
-        let pair = std::str::from_utf8(chunk)
-            .map_err(|e| S4Error::Other(format!("invalid artifact id encoding: {e}")))?;
-        out[index] = u8::from_str_radix(pair, 16)
-            .map_err(|e| S4Error::Other(format!("invalid artifact id hex: {e}")))?;
-    }
-    Ok(out)
+        .map_err(|e| S4Error::Storage(format!("failed to write {}: {e}", path.display())))
 }

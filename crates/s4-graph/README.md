@@ -13,9 +13,9 @@ Defines nodes, edges, graph views, layers, and query interfaces for the code gra
 | `node` | `Node`, `NodeKind` |
 | `edge` | `Edge`, `EdgeKind` |
 | `view` | `GraphView`, `GraphBuilder` |
-| `memory` | `InMemoryGraph`, `InMemoryGraphView` |
 | `layer` | `GraphLayer` |
-| `query` | `GraphQuery` trait |
+| `query` | `FilterQuery`, `GraphQuery`, `GraphDiff` |
+| `memory` | `InMemoryGraph`, `InMemoryGraphView` (`GraphView::nodes()` enumerates sparse IDs) |
 
 ## Tier
 

@@ -49,6 +49,12 @@ enum Commands {
         /// Diff report output path.
         #[arg(long, default_value = ".s4/reports/diff-report.md")]
         out: String,
+        /// Rebuild graphs even when the physical snapshot hash is unchanged.
+        #[arg(long, default_value_t = false)]
+        force: bool,
+        /// `git fetch` cached clones before building.
+        #[arg(long, default_value_t = false)]
+        refresh: bool,
     },
     /// Query a built source graph (`all` | `kind:callable` | `label~substr`).
     Query {
@@ -202,6 +208,12 @@ enum GraphAction {
         /// Directory for graph manifest output.
         #[arg(long, default_value = ".s4/graphs")]
         out_dir: String,
+        /// Rebuild even when the physical snapshot hash is unchanged.
+        #[arg(long, default_value_t = false)]
+        force: bool,
+        /// `git fetch` cached clones before building.
+        #[arg(long, default_value_t = false)]
+        refresh: bool,
     },
     /// Export a built graph for visualization (Graphviz DOT or JSON).
     Export {
@@ -250,6 +262,9 @@ enum SourceAction {
         /// Primary language (`java` or `rust`).
         #[arg(long)]
         lang: String,
+        /// `git fetch` if this alias is already cached.
+        #[arg(long, default_value_t = false)]
+        refresh: bool,
     },
     /// List registered sources.
     List,
@@ -298,9 +313,13 @@ fn main() {
 fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Commands::Init { path } => init::run(&path),
-        Commands::Analyze { java, rust, out } => {
-            analyze::run(java.as_deref(), rust.as_deref(), &out)
-        },
+        Commands::Analyze {
+            java,
+            rust,
+            out,
+            force,
+            refresh,
+        } => analyze::run(java.as_deref(), rust.as_deref(), &out, force, refresh),
         Commands::Query {
             source,
             expr,
@@ -322,6 +341,7 @@ fn run(cli: Cli) -> Result<()> {
                 git_ref,
                 subpath,
                 lang,
+                refresh,
             } => source::run_add(
                 &alias,
                 git.as_deref(),
@@ -329,11 +349,17 @@ fn run(cli: Cli) -> Result<()> {
                 git_ref.as_deref(),
                 subpath.as_deref(),
                 &lang,
+                refresh,
             ),
             SourceAction::List => source::run_list(),
         },
         Commands::Graph { action } => match action {
-            GraphAction::Build { source, out_dir } => graph::run_build(&source, &out_dir),
+            GraphAction::Build {
+                source,
+                out_dir,
+                force,
+                refresh,
+            } => graph::run_build(&source, &out_dir, force, refresh),
             GraphAction::Export {
                 source,
                 format,

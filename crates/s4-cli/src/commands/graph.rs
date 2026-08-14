@@ -1,25 +1,23 @@
 use crate::graph_export::GraphExportFormat;
-use crate::workspace::{
-    count_nodes, discover_parse_units, load_usir_modules, save_graph_projection, Workspace,
-};
+use crate::workspace::{count_nodes, discover_parse_units, save_graph_projection, Workspace};
 use s4_analysis::usir_to_graph;
 use s4_core::Result;
 use s4_graph::NodeKind;
 use s4_parser::plugins::{
-    extract_java_module, extract_rust_module, parse_all_cached, JavaParser, RustParser,
+    extract_java_module, extract_rust_module, parse_all_parallel, ParsedModules,
 };
 use s4_parser::{LanguageId, ParseContext, ParseUnit};
-use s4_project::{snapshot_physical, DefaultSourceIngestor, SourceIngestor};
+use s4_project::{snapshot_path_hashes, snapshot_physical, DefaultSourceIngestor, SourceIngestor};
 use s4_storage::StoreWriter;
 use std::path::{Path, PathBuf};
 
 const DEFAULT_EXPORT_OUT: &str = ".s4/exports/graph";
 
 /// Build a semantic graph for a registered source alias.
-pub fn run_build(source: &str, out_dir: &str) -> Result<()> {
+pub fn run_build(source: &str, out_dir: &str, force: bool, refresh: bool) -> Result<()> {
     let ws = Workspace::open(".")?;
     let source_ref = ws.find_source(source)?;
-    let ingestor = DefaultSourceIngestor::new(ws.root().to_path_buf());
+    let ingestor = DefaultSourceIngestor::new(ws.root().to_path_buf()).with_refresh(refresh);
 
     println!("Resolving source '{source}'...");
     let resolved = ingestor.resolve(&source_ref)?;
@@ -36,15 +34,40 @@ pub fn run_build(source: &str, out_dir: &str) -> Result<()> {
         .map_or(0, std::vec::Vec::len);
     println!("  {file_count} files hashed (artifact {snapshot_id})");
 
-    let units = discover_parse_units(&resolved.local_root, &source_ref.language)?;
+    let out_path = Path::new(out_dir);
+    std::fs::create_dir_all(out_path).map_err(|e| {
+        s4_core::S4Error::Storage(format!(
+            "failed to create output directory {}: {e}",
+            out_path.display()
+        ))
+    })?;
+
+    if !force {
+        if let Ok(existing) = ws.load_graph_manifest(source) {
+            if existing.snapshot_artifact_id == snapshot_id.to_string() {
+                println!(
+                    "Snapshot unchanged; reusing graph {} (pass --force to rebuild)",
+                    existing.graph_artifact_id
+                );
+                write_graph_manifest(out_path, &ws, &existing)?;
+                return Ok(());
+            }
+        }
+    }
+
+    let units = discover_parse_units(
+        &resolved.local_root,
+        &source_ref.language,
+        &snapshot_path_hashes(&snapshot)?,
+    )?;
     println!("Parsing {} {} files...", units.len(), source_ref.language.0);
 
     let mut ctx = ParseContext {
         source_root: &resolved.local_root,
         store: &mut store,
     };
-    let module_ids = parse_with_language(&source_ref.language, &units, &mut ctx)?;
-    let modules = load_usir_modules(&store, &module_ids)?;
+    let parsed = parse_with_language(&source_ref.language, &units, &mut ctx)?;
+    let modules = parsed.modules;
 
     let callable_count = modules
         .iter()
@@ -69,14 +92,6 @@ pub fn run_build(source: &str, out_dir: &str) -> Result<()> {
     let type_nodes = count_nodes(graph.as_ref(), &NodeKind::Type);
     println!("  {node_count} nodes ({callable_nodes} callables, {type_nodes} types)");
 
-    let out_path = Path::new(out_dir);
-    std::fs::create_dir_all(out_path).map_err(|e| {
-        s4_core::S4Error::Other(format!(
-            "failed to create output directory {}: {e}",
-            out_path.display()
-        ))
-    })?;
-
     let manifest = crate::workspace::GraphManifest {
         source_alias: source.to_string(),
         graph_artifact_id: graph_id.to_string(),
@@ -87,28 +102,36 @@ pub fn run_build(source: &str, out_dir: &str) -> Result<()> {
         node_count,
     };
 
-    let manifest_path = out_path.join(format!("{source}.json"));
-    let bytes = serde_json::to_vec_pretty(&manifest)
-        .map_err(|e| s4_core::S4Error::Other(format!("failed to serialize graph manifest: {e}")))?;
+    write_graph_manifest(out_path, &ws, &manifest)?;
+    println!(
+        "Graph manifest written to {} (artifact {graph_id})",
+        out_path.join(format!("{source}.json")).display()
+    );
+    Ok(())
+}
+
+fn write_graph_manifest(
+    out_path: &Path,
+    ws: &Workspace,
+    manifest: &crate::workspace::GraphManifest,
+) -> Result<()> {
+    let manifest_path = out_path.join(format!("{}.json", manifest.source_alias));
+    let bytes = serde_json::to_vec_pretty(manifest).map_err(|e| {
+        s4_core::S4Error::Storage(format!("failed to serialize graph manifest: {e}"))
+    })?;
     std::fs::write(&manifest_path, bytes).map_err(|e| {
-        s4_core::S4Error::Other(format!(
+        s4_core::S4Error::Storage(format!(
             "failed to write graph manifest {}: {e}",
             manifest_path.display()
         ))
     })?;
-
     if out_path != ws.graphs_dir().as_path() {
-        ws.save_graph_manifest(&manifest)?;
+        ws.save_graph_manifest(manifest)?;
         println!(
             "Graph manifest also written to {}",
-            ws.graph_manifest_path(source).display()
+            ws.graph_manifest_path(&manifest.source_alias).display()
         );
     }
-
-    println!(
-        "Graph manifest written to {} (artifact {graph_id})",
-        manifest_path.display()
-    );
     Ok(())
 }
 
@@ -134,7 +157,7 @@ pub fn run_export(source: &str, format: &str, filter: &str, out: &str) -> Result
     if let Some(parent) = out_path.parent() {
         if !parent.as_os_str().is_empty() {
             std::fs::create_dir_all(parent).map_err(|e| {
-                s4_core::S4Error::Other(format!(
+                s4_core::S4Error::Storage(format!(
                     "failed to create output directory {}: {e}",
                     parent.display()
                 ))
@@ -143,7 +166,7 @@ pub fn run_export(source: &str, format: &str, filter: &str, out: &str) -> Result
     }
 
     std::fs::write(&out_path, rendered).map_err(|e| {
-        s4_core::S4Error::Other(format!(
+        s4_core::S4Error::Storage(format!(
             "failed to write graph export {}: {e}",
             out_path.display()
         ))
@@ -214,30 +237,17 @@ fn parse_with_language(
     language: &LanguageId,
     units: &[ParseUnit],
     ctx: &mut ParseContext<'_>,
-) -> Result<Vec<s4_core::ArtifactId>> {
+) -> Result<ParsedModules> {
     match language.0.as_str() {
-        "java" => {
-            // Prefer parallel extract + sequential CAS write when there is more than one unit.
-            if units.len() > 1 {
-                parse_all_cached(units, ctx.source_root, ctx.store, |unit, root| {
-                    let source = s4_parser::plugins::read_unit_source(unit)?;
-                    extract_java_module(&source, &unit.path, root)
-                })
-            } else {
-                s4_parser::plugins::parse_all_sequential(&JavaParser, units, ctx)
-            }
-        },
-        "rust" => {
-            if units.len() > 1 {
-                parse_all_cached(units, ctx.source_root, ctx.store, |unit, root| {
-                    let source = s4_parser::plugins::read_unit_source(unit)?;
-                    extract_rust_module(&source, &unit.path, root)
-                })
-            } else {
-                s4_parser::plugins::parse_all_sequential(&RustParser, units, ctx)
-            }
-        },
-        other => Err(s4_core::S4Error::Other(format!(
+        "java" => parse_all_parallel(units, ctx.source_root, ctx.store, |unit, root| {
+            let source = s4_parser::plugins::read_unit_source(unit)?;
+            extract_java_module(&source, &unit.path, root)
+        }),
+        "rust" => parse_all_parallel(units, ctx.source_root, ctx.store, |unit, root| {
+            let source = s4_parser::plugins::read_unit_source(unit)?;
+            extract_rust_module(&source, &unit.path, root)
+        }),
+        other => Err(s4_core::S4Error::InvalidInput(format!(
             "no parser registered for language '{other}'"
         ))),
     }

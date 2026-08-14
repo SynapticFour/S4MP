@@ -8,7 +8,7 @@ pub struct Event {
     pub kind: EventKind,
     /// Originating project, if applicable.
     pub project_id: Option<ProjectId>,
-    /// ISO-8601 timestamp.
+    /// RFC-3339 UTC timestamp.
     pub timestamp: String,
 }
 

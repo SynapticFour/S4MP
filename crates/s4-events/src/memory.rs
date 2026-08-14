@@ -4,9 +4,8 @@
 //! sink until a runtime is wired.
 
 use crate::{Event, EventKind};
-use s4_core::ProjectId;
+use s4_core::{utc_rfc3339, ProjectId};
 use std::sync::Mutex;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Thread-safe recorder for pipeline events.
 #[derive(Debug, Default)]
@@ -21,15 +20,12 @@ impl RecordingEventSink {
         Self::default()
     }
 
-    /// Append an event with the current UTC unix timestamp.
+    /// Append an event with the current UTC RFC-3339 timestamp.
     pub fn emit(&self, kind: EventKind, project_id: Option<ProjectId>) {
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_or_else(|_| "0".to_string(), |d| d.as_secs().to_string());
         let event = Event {
             kind,
             project_id,
-            timestamp,
+            timestamp: utc_rfc3339(),
         };
         self.events
             .lock()

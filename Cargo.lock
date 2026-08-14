@@ -336,20 +336,10 @@ dependencies = [
  "s4-core",
  "s4-events",
  "s4-graph",
- "s4-knowledge",
  "s4-parser",
  "s4-storage",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "s4-api"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "s4-core",
- "serde",
 ]
 
 [[package]]
@@ -359,7 +349,6 @@ dependencies = [
  "s4-core",
  "s4-verification",
  "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -446,22 +435,12 @@ name = "s4-parser"
 version = "0.1.0"
 dependencies = [
  "s4-core",
- "s4-plugin",
  "s4-storage",
  "serde",
  "serde_json",
  "tree-sitter",
  "tree-sitter-java",
  "tree-sitter-rust",
-]
-
-[[package]]
-name = "s4-planner"
-version = "0.1.0"
-dependencies = [
- "s4-analysis",
- "s4-core",
- "serde",
 ]
 
 [[package]]
@@ -489,22 +468,12 @@ name = "s4-requirements"
 version = "0.1.0"
 dependencies = [
  "s4-core",
- "s4-knowledge",
  "serde",
  "serde_json",
 ]
 
 [[package]]
 name = "s4-storage"
-version = "0.1.0"
-dependencies = [
- "s4-core",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "s4-ui"
 version = "0.1.0"
 dependencies = [
  "s4-core",

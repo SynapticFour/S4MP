@@ -1,5 +1,7 @@
+use crate::{Result, S4Error};
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::str::FromStr;
 
 /// Content-addressed identifier for immutable artifacts (Blake3, hex-encoded).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -37,9 +39,55 @@ impl fmt::Display for ArtifactId {
     }
 }
 
-/// Opaque identifier for a graph entity.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
-pub struct EntityId(pub u64);
+impl FromStr for ArtifactId {
+    type Err = S4Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        if s.len() != 64 {
+            return Err(S4Error::InvalidId(format!(
+                "artifact id must be 64 hex characters, got {}",
+                s.len()
+            )));
+        }
+        let mut out = [0_u8; 32];
+        for (index, chunk) in s.as_bytes().chunks(2).enumerate() {
+            let pair = std::str::from_utf8(chunk)
+                .map_err(|e| S4Error::InvalidId(format!("invalid artifact id encoding: {e}")))?;
+            out[index] = u8::from_str_radix(pair, 16)
+                .map_err(|e| S4Error::InvalidId(format!("invalid artifact id hex: {e}")))?;
+        }
+        Ok(Self(out))
+    }
+}
+
+/// Snapshot-scoped knowledge identifier (graph alias + node id).
+///
+/// Distinct from graph-local node ids: traces name both the source graph and the
+/// node so identifiers are not mixed across snapshots.
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
+pub struct EntityId {
+    /// Source graph alias (workspace source name).
+    pub graph: String,
+    /// Node identifier within that graph.
+    pub node: u64,
+}
+
+impl EntityId {
+    /// Bind a graph-local node id to a named source graph.
+    #[must_use]
+    pub fn new(graph: impl Into<String>, node: u64) -> Self {
+        Self {
+            graph: graph.into(),
+            node,
+        }
+    }
+}
+
+impl fmt::Display for EntityId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.graph, self.node)
+    }
+}
 
 /// Identifies a registered plugin.
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]

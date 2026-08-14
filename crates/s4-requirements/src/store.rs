@@ -56,7 +56,7 @@ impl RequirementsDocument {
         kind: TraceLinkKind,
     ) -> Result<()> {
         if !self.requirements.contains_key(&requirement.0) {
-            return Err(S4Error::Other(format!(
+            return Err(S4Error::InvalidInput(format!(
                 "unknown requirement id {}",
                 requirement.0
             )));
@@ -79,9 +79,9 @@ impl RequirementsDocument {
             return Ok(Self::new());
         }
         let bytes = std::fs::read(path)
-            .map_err(|e| S4Error::Other(format!("failed to read {}: {e}", path.display())))?;
+            .map_err(|e| S4Error::Storage(format!("failed to read {}: {e}", path.display())))?;
         serde_json::from_slice(&bytes)
-            .map_err(|e| S4Error::Other(format!("failed to parse {}: {e}", path.display())))
+            .map_err(|e| S4Error::Storage(format!("failed to parse {}: {e}", path.display())))
     }
 
     /// Persist as pretty JSON.
@@ -92,13 +92,13 @@ impl RequirementsDocument {
     pub fn save(&self, path: &Path) -> Result<()> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| {
-                S4Error::Other(format!("failed to create {}: {e}", parent.display()))
+                S4Error::Storage(format!("failed to create {}: {e}", parent.display()))
             })?;
         }
         let bytes = serde_json::to_vec_pretty(self)
-            .map_err(|e| S4Error::Other(format!("failed to serialize requirements: {e}")))?;
+            .map_err(|e| S4Error::Storage(format!("failed to serialize requirements: {e}")))?;
         std::fs::write(path, bytes)
-            .map_err(|e| S4Error::Other(format!("failed to write {}: {e}", path.display())))
+            .map_err(|e| S4Error::Storage(format!("failed to write {}: {e}", path.display())))
     }
 
     /// Import `OpenAPI` `paths` keys as functional API contract requirements.
@@ -110,11 +110,11 @@ impl RequirementsDocument {
     /// Returns an error if the file cannot be read or parsed as JSON.
     pub fn import_openapi_paths(&mut self, path: &Path) -> Result<usize> {
         let bytes = std::fs::read(path)
-            .map_err(|e| S4Error::Other(format!("failed to read {}: {e}", path.display())))?;
+            .map_err(|e| S4Error::Storage(format!("failed to read {}: {e}", path.display())))?;
         let value: serde_json::Value = serde_json::from_slice(&bytes)
-            .map_err(|e| S4Error::Other(format!("failed to parse OpenAPI JSON: {e}")))?;
+            .map_err(|e| S4Error::Storage(format!("failed to parse OpenAPI JSON: {e}")))?;
         let Some(paths) = value.get("paths").and_then(|p| p.as_object()) else {
-            return Err(S4Error::Other(
+            return Err(S4Error::InvalidInput(
                 "OpenAPI document has no object 'paths' field".to_string(),
             ));
         };
@@ -130,23 +130,51 @@ impl RequirementsDocument {
     }
 
     /// Suggest traces by matching requirement statement tokens to callable labels.
+    ///
+    /// Uses whole-word (identifier-boundary) matching after lowercasing, not substring.
     #[must_use]
     pub fn suggest_traces_by_name(
         &self,
         callables: &[(EntityId, String)],
     ) -> Vec<(RequirementId, EntityId, String)> {
+        let lowered: Vec<(EntityId, String, String)> = callables
+            .iter()
+            .map(|(id, label)| (id.clone(), label.clone(), label.to_ascii_lowercase()))
+            .collect();
         let mut out = Vec::new();
         for req in self.requirements.values() {
             let stmt = req.statement.to_ascii_lowercase();
-            for (entity, label) in callables {
-                let needle = label.to_ascii_lowercase();
-                if needle.len() >= 3 && stmt.contains(&needle) {
-                    out.push((req.id, *entity, label.clone()));
+            for (entity, label, needle) in &lowered {
+                if contains_ident_word(&stmt, needle) {
+                    out.push((req.id, entity.clone(), label.clone()));
                 }
             }
         }
         out
     }
+}
+
+fn contains_ident_word(haystack: &str, needle: &str) -> bool {
+    if needle.len() < 3 {
+        return false;
+    }
+    let bytes = haystack.as_bytes();
+    let mut start = 0;
+    while let Some(pos) = haystack[start..].find(needle) {
+        let abs = start + pos;
+        let before_ok = abs == 0 || !is_ident_byte(bytes[abs - 1]);
+        let end = abs + needle.len();
+        let after_ok = end >= bytes.len() || !is_ident_byte(bytes[end]);
+        if before_ok && after_ok {
+            return true;
+        }
+        start = abs + 1;
+    }
+    false
+}
+
+fn is_ident_byte(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_'
 }
 
 impl TraceabilityGraph for RequirementsDocument {
@@ -172,7 +200,7 @@ mod tests {
     fn add_and_trace() {
         let mut doc = RequirementsDocument::new();
         let id = doc.add(RequirementKind::Functional, "Calculator must add");
-        doc.add_trace(id, EntityId(7), TraceLinkKind::ImplementedBy)
+        doc.add_trace(id, EntityId::new("g", 7), TraceLinkKind::ImplementedBy)
             .unwrap();
         assert_eq!(doc.traces_from(id).unwrap().len(), 1);
     }
@@ -181,7 +209,15 @@ mod tests {
     fn suggest_by_name() {
         let mut doc = RequirementsDocument::new();
         let id = doc.add(RequirementKind::Functional, "add two integers");
-        let suggestions = doc.suggest_traces_by_name(&[(EntityId(1), "add".into())]);
+        let suggestions = doc.suggest_traces_by_name(&[(EntityId::new("g", 1), "add".into())]);
         assert_eq!(suggestions[0].0, id);
+        let extra = doc.suggest_traces_by_name(&[(EntityId::new("g", 2), "add".into())]);
+        let additional = {
+            let mut d = RequirementsDocument::new();
+            d.add(RequirementKind::Functional, "additional coverage");
+            d.suggest_traces_by_name(&[(EntityId::new("g", 1), "add".into())])
+        };
+        assert!(additional.is_empty(), "{additional:?}");
+        assert_eq!(extra.len(), 1);
     }
 }

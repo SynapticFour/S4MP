@@ -22,7 +22,10 @@ impl InMemoryGraph {
 impl GraphBuilder for InMemoryGraph {
     fn add_node(&mut self, node: Node) -> Result<()> {
         if self.node_ids.contains_key(&node.id) {
-            return Err(S4Error::Other(format!("duplicate node id: {}", node.id.0)));
+            return Err(S4Error::InvalidId(format!(
+                "duplicate node id: {}",
+                node.id.0
+            )));
         }
         let index = self.nodes.len();
         self.node_ids.insert(node.id, index);
@@ -32,13 +35,13 @@ impl GraphBuilder for InMemoryGraph {
 
     fn add_edge(&mut self, edge: Edge) -> Result<()> {
         if !self.node_ids.contains_key(&edge.from) {
-            return Err(S4Error::Other(format!(
+            return Err(S4Error::InvalidId(format!(
                 "edge source node not found: {}",
                 edge.from.0
             )));
         }
         if !self.node_ids.contains_key(&edge.to) {
-            return Err(S4Error::Other(format!(
+            return Err(S4Error::InvalidId(format!(
                 "edge target node not found: {}",
                 edge.to.0
             )));
@@ -90,6 +93,10 @@ impl GraphView for InMemoryGraphView {
 
     fn edges(&self) -> Box<dyn Iterator<Item = &Edge> + '_> {
         Box::new(self.edges.iter())
+    }
+
+    fn nodes(&self) -> Box<dyn Iterator<Item = &Node> + '_> {
+        Box::new(self.nodes.iter())
     }
 
     fn node_count(&self) -> usize {

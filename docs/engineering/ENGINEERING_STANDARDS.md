@@ -1,8 +1,8 @@
 # Engineering Standards
 ## S4MP Platform — Mandatory Baseline v0.1
 
-> **Status:** Effective immediately — all new implementation must comply  
-> **Authority:** This document supersedes ad-hoc conventions. Deviations require an ADR or RFC.  
+> **Status:** Effective immediately — all new implementation must comply
+> **Authority:** This document supersedes ad-hoc conventions. Deviations require an ADR or RFC.
 > **Related:** [Architecture](../architecture/ARCHITECTURE.md), [ADR Index](../adr/README.md), [RFC Process](../rfc/README.md)
 
 ---
@@ -133,8 +133,10 @@ Crates must not depend upward (see README tier diagram). CI checks via `cargo de
 | 0 | `s4-core` |
 | 1 | `s4-storage`, `s4-events`, `s4-plugin`, `s4-project` |
 | 2 | `s4-parser`, `s4-graph`, `s4-knowledge`, `s4-requirements`, `s4-metrics`, `s4-analysis` |
-| 3 | `s4-planner`, `s4-verification`, `s4-certification`, `s4-llm` |
-| 4 | `s4-api`, `s4-cli`, `s4-ui` |
+| 3 | `s4-verification`, `s4-certification`, `s4-llm` |
+| 4 | `s4-cli` |
+
+Parked (workspace `exclude`, not built in CI): `s4-planner`, `s4-api`, `s4-ui`.
 
 ---
 

@@ -1,6 +1,6 @@
 # s4-planner
 
-Refactoring planning and change orchestration contracts.
+**Parked** — not a default workspace member. Refactoring planning **contracts**. Re-add to `Cargo.toml` members when a `Planner` implementor ships.
 
 ## Public API
 

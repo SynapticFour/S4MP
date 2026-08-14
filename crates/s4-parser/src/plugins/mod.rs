@@ -7,11 +7,12 @@ pub use java::{extract_java_module, JavaParser};
 pub use rust::{extract_rust_module, RustParser};
 
 use crate::usir::{
-    UnresolvedCall, UsirEntity, UsirEntityKind, UsirModule, UsirRelation, UsirRelationKind,
+    UnresolvedCall, UsirEntity, UsirEntityKind, UsirLocalId, UsirModule, UsirRelation,
+    UsirRelationKind,
 };
 use crate::{ParseContext, ParsePipeline, ParseUnit};
-use s4_core::{Result, S4Error, SchemaVersion};
-use s4_storage::{Artifact, ArtifactKind, StoreWriter};
+use s4_core::{ArtifactId, Result, S4Error, SchemaVersion};
+use s4_storage::{Artifact, ArtifactKind, Store, StoreReader, StoreWriter};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
@@ -22,9 +23,9 @@ pub struct UsirModuleBuilder {
     next_id: u64,
     entities: Vec<UsirEntity>,
     relations: Vec<UsirRelation>,
-    callable_ids: HashMap<String, u64>,
-    type_ids: HashMap<String, u64>,
-    deferred_calls: Vec<(u64, String)>,
+    callable_ids: HashMap<String, Vec<UsirLocalId>>,
+    type_ids: HashMap<String, UsirLocalId>,
+    deferred_calls: Vec<(UsirLocalId, String)>,
 }
 
 impl UsirModuleBuilder {
@@ -36,7 +37,7 @@ impl UsirModuleBuilder {
     pub fn new(path: &str, source_root: &Path) -> Result<Self> {
         let module_name = module_name_from_path(path, source_root)?;
         let entities = vec![UsirEntity {
-            id: 0,
+            id: UsirLocalId(0),
             kind: UsirEntityKind::Module,
             name: module_name.clone(),
             signature: None,
@@ -53,24 +54,32 @@ impl UsirModuleBuilder {
     }
 
     /// Add a type entity (class, interface, enum, struct, trait, …).
-    pub fn add_type(&mut self, name: &str) -> u64 {
+    pub fn add_type(&mut self, name: &str) -> UsirLocalId {
         self.add_entity(name, UsirEntityKind::Type, None)
     }
 
     /// Add a callable entity (method, function, constructor, …).
-    pub fn add_callable(&mut self, name: &str, signature: Option<String>) -> u64 {
+    pub fn add_callable(&mut self, name: &str, signature: Option<String>) -> UsirLocalId {
         let id = self.add_entity(name, UsirEntityKind::Callable, signature);
-        self.callable_ids.insert(name.to_string(), id);
+        self.callable_ids
+            .entry(name.to_string())
+            .or_default()
+            .push(id);
         id
     }
 
     /// Add a symbol entity (field, const, static, …).
-    pub fn add_symbol(&mut self, name: &str) -> u64 {
+    pub fn add_symbol(&mut self, name: &str) -> UsirLocalId {
         self.add_entity(name, UsirEntityKind::Symbol, None)
     }
 
-    fn add_entity(&mut self, name: &str, kind: UsirEntityKind, signature: Option<String>) -> u64 {
-        let id = self.next_id;
+    fn add_entity(
+        &mut self,
+        name: &str,
+        kind: UsirEntityKind,
+        signature: Option<String>,
+    ) -> UsirLocalId {
+        let id = UsirLocalId(self.next_id);
         self.next_id += 1;
         if kind == UsirEntityKind::Type {
             self.type_ids.insert(name.to_string(), id);
@@ -82,7 +91,7 @@ impl UsirModuleBuilder {
             signature,
         });
         self.relations.push(UsirRelation {
-            from: 0,
+            from: UsirLocalId(0),
             to: id,
             kind: UsirRelationKind::Defines,
         });
@@ -90,7 +99,7 @@ impl UsirModuleBuilder {
     }
 
     /// Record a `References` edge when the target type name is known in this module.
-    pub fn reference_type(&mut self, from: u64, type_name: &str) {
+    pub fn reference_type(&mut self, from: UsirLocalId, type_name: &str) {
         if let Some(&to) = self.type_ids.get(type_name) {
             self.relations.push(UsirRelation {
                 from,
@@ -105,7 +114,7 @@ impl UsirModuleBuilder {
     /// Bodies are resolved against the full `callable_ids` map after all callables
     /// in the module have been registered. Unresolved names become
     /// [`UsirModule::unresolved_calls`] for cross-module linking.
-    pub fn defer_calls(&mut self, caller_id: u64, body: String) {
+    pub fn defer_calls(&mut self, caller_id: UsirLocalId, body: String) {
         self.deferred_calls.push((caller_id, body));
     }
 
@@ -118,32 +127,31 @@ impl UsirModuleBuilder {
         unresolved
     }
 
-    /// Heuristic call detection: `callee(` substring in `body` maps to known callables.
+    /// Heuristic call detection: `name(` identifiers in `body` map to local callables.
     ///
-    /// Returns unresolved callee names for cross-module linking.
-    pub fn add_heuristic_calls(&mut self, caller_id: u64, body: &str) -> Vec<UnresolvedCall> {
+    /// Overloads of the same name all receive a `Calls` edge. Names with no local
+    /// callable become [`UnresolvedCall`] for cross-module linking.
+    pub fn add_heuristic_calls(
+        &mut self,
+        caller_id: UsirLocalId,
+        body: &str,
+    ) -> Vec<UnresolvedCall> {
         let mut unresolved = Vec::new();
         let mut seen_unresolved = HashSet::new();
 
-        for (name, &callee_id) in &self.callable_ids {
-            if caller_id == callee_id {
-                continue;
-            }
-            if contains_call(body, name) {
-                self.relations.push(UsirRelation {
-                    from: caller_id,
-                    to: callee_id,
-                    kind: UsirRelationKind::Calls,
-                });
-            }
-        }
-
-        // Collect simple identifier-call patterns that did not match local callables.
         for name in extract_call_names(body) {
-            if self.callable_ids.contains_key(&name) {
-                continue;
-            }
-            if seen_unresolved.insert(name.clone()) {
+            if let Some(ids) = self.callable_ids.get(&name) {
+                for &callee_id in ids {
+                    if callee_id == caller_id {
+                        continue;
+                    }
+                    self.relations.push(UsirRelation {
+                        from: caller_id,
+                        to: callee_id,
+                        kind: UsirRelationKind::Calls,
+                    });
+                }
+            } else if seen_unresolved.insert(name.clone()) {
                 unresolved.push(UnresolvedCall {
                     from: caller_id,
                     callee_name: name,
@@ -179,7 +187,7 @@ pub fn read_unit_source(unit: &ParseUnit) -> Result<String> {
         return Ok(text.clone());
     }
     std::fs::read_to_string(&unit.path)
-        .map_err(|e| S4Error::Other(format!("failed to read {}: {e}", unit.path)))
+        .map_err(|e| S4Error::Storage(format!("failed to read {}: {e}", unit.path)))
 }
 
 /// Persist a USIR module artifact and return its content address.
@@ -192,7 +200,7 @@ pub fn persist_usir_module(
     module: &UsirModule,
 ) -> Result<s4_core::ArtifactId> {
     let payload = serde_json::to_value(module)
-        .map_err(|e| S4Error::Other(format!("failed to serialize USIR module: {e}")))?;
+        .map_err(|e| S4Error::Storage(format!("failed to serialize USIR module: {e}")))?;
     let artifact = Artifact {
         kind: ArtifactKind::UsirModule,
         schema_version: SchemaVersion::CURRENT,
@@ -211,12 +219,14 @@ pub fn parse_tree(
     language: &tree_sitter::Language,
     source: &str,
 ) -> Result<tree_sitter::Tree> {
-    parser
-        .set_language(language)
-        .map_err(|e| S4Error::Other(format!("failed to set tree-sitter language: {e}")))?;
-    parser
-        .parse(source, None)
-        .ok_or_else(|| S4Error::Other("tree-sitter returned no syntax tree".to_string()))
+    parser.set_language(language).map_err(|e| S4Error::Plugin {
+        plugin_id: "tree-sitter".into(),
+        message: format!("failed to set language: {e}"),
+    })?;
+    parser.parse(source, None).ok_or_else(|| S4Error::Plugin {
+        plugin_id: "tree-sitter".into(),
+        message: "parser returned no syntax tree".into(),
+    })
 }
 
 /// Extract child node text for a field name when present.
@@ -291,7 +301,7 @@ fn module_name_from_path(path: &str, source_root: &Path) -> Result<String> {
     let path_buf = PathBuf::from(path);
     let relative = if path_buf.is_absolute() {
         path_buf.strip_prefix(source_root).map_err(|_| {
-            S4Error::Other(format!(
+            S4Error::InvalidInput(format!(
                 "path {} is not under source root {}",
                 path,
                 source_root.display()
@@ -307,20 +317,9 @@ fn module_name_from_path(path: &str, source_root: &Path) -> Result<String> {
         .join("/"))
 }
 
+#[cfg(test)]
 fn contains_call(body: &str, callee: &str) -> bool {
-    let needle = format!("{callee}(");
-    let bytes = body.as_bytes();
-    let mut start = 0;
-    while let Some(pos) = body[start..].find(&needle) {
-        let abs_pos = start + pos;
-        let boundary_ok = abs_pos == 0
-            || !(bytes[abs_pos - 1].is_ascii_alphanumeric() || bytes[abs_pos - 1] == b'_');
-        if boundary_ok {
-            return true;
-        }
-        start = abs_pos + 1;
-    }
-    false
+    extract_call_names(body).iter().any(|n| n == callee)
 }
 
 /// Extract simple `name(` call identifiers from a body (heuristic).
@@ -393,39 +392,171 @@ pub fn parse_all_sequential<P: ParsePipeline + ?Sized>(
     Ok(ids)
 }
 
-/// Extract USIR modules in parallel (no store I/O), then persist sequentially.
+/// Extracted USIR modules plus their persisted artifact IDs.
+#[derive(Debug)]
+pub struct ParsedModules {
+    /// Content addresses of persisted USIR artifacts, parallel to [`Self::modules`].
+    pub ids: Vec<s4_core::ArtifactId>,
+    /// In-memory modules (same order as `ids`).
+    pub modules: Vec<UsirModule>,
+}
+
+fn usir_cache_id(language: &str, module_name: &str, file_hash: &str) -> ArtifactId {
+    let mut buf = Vec::with_capacity(32 + language.len() + module_name.len() + file_hash.len());
+    buf.extend_from_slice(b"s4-usir-cache-v1\0");
+    buf.extend_from_slice(language.as_bytes());
+    buf.push(0);
+    buf.extend_from_slice(module_name.as_bytes());
+    buf.push(0);
+    buf.extend_from_slice(file_hash.as_bytes());
+    ArtifactId::from_content(&buf)
+}
+
+fn load_cached_usir(
+    store: &dyn StoreReader,
+    language: &str,
+    module_name: &str,
+    file_hash: &str,
+) -> Result<Option<(ArtifactId, UsirModule)>> {
+    let cache_id = usir_cache_id(language, module_name, file_hash);
+    let Some(record) = store.read(&cache_id)? else {
+        return Ok(None);
+    };
+    if record.kind != ArtifactKind::UsirCache {
+        return Ok(None);
+    }
+    record.expect_current_schema()?;
+    let Some(hex) = record
+        .payload
+        .get("usir_id")
+        .and_then(serde_json::Value::as_str)
+    else {
+        return Ok(None);
+    };
+    let usir_id: ArtifactId = hex.parse()?;
+    let Some(artifact) = store.read(&usir_id)? else {
+        return Ok(None);
+    };
+    if artifact.kind != ArtifactKind::UsirModule {
+        return Ok(None);
+    }
+    artifact.expect_current_schema()?;
+    let module: UsirModule = serde_json::from_value(artifact.payload)
+        .map_err(|e| S4Error::Storage(format!("failed to deserialize cached USIR: {e}")))?;
+    Ok(Some((usir_id, module)))
+}
+
+fn index_usir_cache(
+    store: &mut dyn StoreWriter,
+    language: &str,
+    module_name: &str,
+    file_hash: &str,
+    usir_id: ArtifactId,
+) -> Result<()> {
+    let cache_id = usir_cache_id(language, module_name, file_hash);
+    let artifact = Artifact {
+        kind: ArtifactKind::UsirCache,
+        schema_version: SchemaVersion::CURRENT,
+        payload: serde_json::json!({ "usir_id": usir_id.to_string() }),
+    };
+    store.write_at(cache_id, &artifact)
+}
+
+/// Extract USIR modules with bounded parallelism, reusing CAS entries keyed by
+/// `(language, module path, file hash)` when [`ParseUnit::source_hash`] is set.
 ///
 /// # Errors
 ///
 /// Returns an error if any unit fails to parse or persist, or if a worker thread panics.
-pub fn parse_all_cached<F>(
+pub fn parse_all_parallel<F>(
     units: &[ParseUnit],
     source_root: &Path,
-    store: &mut dyn StoreWriter,
+    store: &mut dyn Store,
     extract: F,
-) -> Result<Vec<s4_core::ArtifactId>>
+) -> Result<ParsedModules>
 where
     F: Fn(&ParseUnit, &Path) -> Result<UsirModule> + Sync,
 {
-    let modules: Result<Vec<UsirModule>> = std::thread::scope(|scope| {
-        let handles: Vec<_> = units
-            .iter()
-            .map(|unit| scope.spawn(|| extract(unit, source_root)))
-            .collect();
-        handles
-            .into_iter()
-            .map(|h| {
-                h.join()
-                    .unwrap_or_else(|_| Err(S4Error::Other("parse worker panicked".to_string())))
-            })
-            .collect()
-    });
-    let modules = modules?;
-    let mut ids = Vec::with_capacity(modules.len());
-    for module in &modules {
-        ids.push(persist_usir_module(store, module)?);
+    let mut modules: Vec<Option<UsirModule>> = vec![None; units.len()];
+    let mut ids: Vec<Option<ArtifactId>> = vec![None; units.len()];
+    let mut pending = Vec::new();
+
+    for (index, unit) in units.iter().enumerate() {
+        if let Some(hash) = &unit.source_hash {
+            let name = module_name_from_path(&unit.path, source_root)?;
+            if let Some((id, module)) = load_cached_usir(store, &unit.language.0, &name, hash)? {
+                ids[index] = Some(id);
+                modules[index] = Some(module);
+                continue;
+            }
+        }
+        pending.push(index);
     }
-    Ok(ids)
+
+    let extracted = extract_pending(units, source_root, &pending, &extract)?;
+    for (index, module) in pending.iter().zip(extracted) {
+        let id = persist_usir_module(store, &module)?;
+        if let Some(hash) = &units[*index].source_hash {
+            let name = module_name_from_path(&units[*index].path, source_root)?;
+            index_usir_cache(store, &units[*index].language.0, &name, hash, id)?;
+        }
+        ids[*index] = Some(id);
+        modules[*index] = Some(module);
+    }
+
+    let mut out_ids = Vec::with_capacity(units.len());
+    let mut out_modules = Vec::with_capacity(units.len());
+    for (id, module) in ids.into_iter().zip(modules) {
+        let id = id.ok_or_else(|| S4Error::Storage("internal: missing USIR id slot".into()))?;
+        let module =
+            module.ok_or_else(|| S4Error::Storage("internal: missing USIR module slot".into()))?;
+        out_ids.push(id);
+        out_modules.push(module);
+    }
+    Ok(ParsedModules {
+        ids: out_ids,
+        modules: out_modules,
+    })
+}
+
+fn extract_pending<F>(
+    units: &[ParseUnit],
+    source_root: &Path,
+    pending: &[usize],
+    extract: &F,
+) -> Result<Vec<UsirModule>>
+where
+    F: Fn(&ParseUnit, &Path) -> Result<UsirModule> + Sync,
+{
+    if pending.is_empty() {
+        return Ok(Vec::new());
+    }
+    let parallelism = std::thread::available_parallelism().map_or(4, std::num::NonZeroUsize::get);
+    let mut out = Vec::with_capacity(pending.len());
+    if pending.len() <= 1 || parallelism <= 1 {
+        for &index in pending {
+            out.push(extract(&units[index], source_root)?);
+        }
+        return Ok(out);
+    }
+    for chunk in pending.chunks(parallelism) {
+        std::thread::scope(|scope| {
+            let handles: Vec<_> = chunk
+                .iter()
+                .map(|&index| scope.spawn(move || extract(&units[index], source_root)))
+                .collect();
+            for handle in handles {
+                out.push(handle.join().unwrap_or_else(|_| {
+                    Err(S4Error::Plugin {
+                        plugin_id: "parser".into(),
+                        message: "parse worker panicked".into(),
+                    })
+                })?);
+            }
+            Ok::<(), S4Error>(())
+        })?;
+    }
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -453,5 +584,50 @@ mod tests {
         let names = extract_call_names("if (x) { foo(1); }");
         assert!(names.contains(&"foo".to_string()));
         assert!(!names.contains(&"if".to_string()));
+    }
+
+    #[test]
+    fn parse_all_parallel_reuses_cas_by_file_hash() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let n = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos());
+        let root = std::env::temp_dir().join(format!("s4-parse-cache-{n}"));
+        let _ = std::fs::remove_dir_all(&root);
+        let mut store = s4_storage::FileSystemStore::new(root.join("store")).expect("store");
+        let unit = ParseUnit {
+            path: "Example.java".into(),
+            language: crate::LanguageId("java".into()),
+            content: None,
+            source_text: Some("class Example { void a() {} }".into()),
+            source_hash: Some("abc123".into()),
+        };
+        let calls = AtomicUsize::new(0);
+        let parsed = parse_all_parallel(
+            std::slice::from_ref(&unit),
+            Path::new("."),
+            &mut store,
+            |u, r| {
+                calls.fetch_add(1, Ordering::SeqCst);
+                extract_java_module(u.source_text.as_deref().unwrap_or(""), &u.path, r)
+            },
+        )
+        .expect("first parse");
+        assert_eq!(parsed.modules.len(), 1);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+
+        let parsed2 = parse_all_parallel(
+            std::slice::from_ref(&unit),
+            Path::new("."),
+            &mut store,
+            |u, r| {
+                calls.fetch_add(1, Ordering::SeqCst);
+                extract_java_module(u.source_text.as_deref().unwrap_or(""), &u.path, r)
+            },
+        )
+        .expect("cached parse");
+        assert_eq!(parsed2.ids, parsed.ids);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

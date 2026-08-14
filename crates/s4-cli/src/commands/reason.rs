@@ -29,12 +29,12 @@ pub fn run(intent: &str, prompt: Option<&str>, out: &str) -> Result<()> {
     let out_path = resolve_out(ws.root(), out);
     if let Some(parent) = out_path.parent() {
         std::fs::create_dir_all(parent)
-            .map_err(|e| S4Error::Other(format!("failed to create {}: {e}", parent.display())))?;
+            .map_err(|e| S4Error::Storage(format!("failed to create {}: {e}", parent.display())))?;
     }
     let bytes = serde_json::to_vec_pretty(&proposal)
-        .map_err(|e| S4Error::Other(format!("serialize proposal: {e}")))?;
+        .map_err(|e| S4Error::Storage(format!("serialize proposal: {e}")))?;
     std::fs::write(&out_path, &bytes)
-        .map_err(|e| S4Error::Other(format!("write {}: {e}", out_path.display())))?;
+        .map_err(|e| S4Error::Storage(format!("write {}: {e}", out_path.display())))?;
 
     println!(
         "proposal lifecycle={:?} kind={:?} claims={} → {}",
@@ -56,7 +56,7 @@ fn parse_intent(raw: &str) -> Result<ReasonIntent> {
         "refactor" | "refactor_plan" => Ok(ReasonIntent::RefactorPlan),
         "map" | "map_requirement" | "requirement" => Ok(ReasonIntent::MapRequirement),
         "architecture" | "architecture_review" | "review" => Ok(ReasonIntent::ArchitectureReview),
-        other => Err(S4Error::Other(format!(
+        other => Err(S4Error::InvalidInput(format!(
             "unknown intent '{other}' (explain|refactor|map|architecture)"
         ))),
     }

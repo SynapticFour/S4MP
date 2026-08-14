@@ -30,13 +30,13 @@ pub fn run_extract(source: &str) -> Result<()> {
         .join(format!("{source}-concepts.json"));
     if let Some(parent) = out.parent() {
         std::fs::create_dir_all(parent).map_err(|e| {
-            s4_core::S4Error::Other(format!("failed to create {}: {e}", parent.display()))
+            s4_core::S4Error::Storage(format!("failed to create {}: {e}", parent.display()))
         })?;
     }
     let bytes = serde_json::to_vec_pretty(&concepts)
-        .map_err(|e| s4_core::S4Error::Other(format!("serialize concepts: {e}")))?;
+        .map_err(|e| s4_core::S4Error::Storage(format!("serialize concepts: {e}")))?;
     std::fs::write(&out, bytes)
-        .map_err(|e| s4_core::S4Error::Other(format!("write {}: {e}", out.display())))?;
+        .map_err(|e| s4_core::S4Error::Storage(format!("write {}: {e}", out.display())))?;
     println!("wrote {}", out.display());
     Ok(())
 }

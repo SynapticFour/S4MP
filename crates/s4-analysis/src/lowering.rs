@@ -2,7 +2,7 @@ use s4_core::{Result, S4Error};
 use s4_graph::memory::InMemoryGraph;
 use s4_graph::view::GraphBuilder;
 use s4_graph::{Edge, EdgeKind, GraphView, Node, NodeId, NodeKind};
-use s4_parser::{UsirEntityKind, UsirModule, UsirRelationKind};
+use s4_parser::{UsirEntityKind, UsirLocalId, UsirModule, UsirRelationKind};
 use std::collections::HashMap;
 
 /// Lower USIR modules into a semantic-layer in-memory graph view.
@@ -17,11 +17,11 @@ use std::collections::HashMap;
 pub fn usir_to_graph(modules: &[UsirModule]) -> Result<Box<dyn GraphView>> {
     let mut builder = InMemoryGraph::new();
     let mut next_node_id = 0_u64;
-    let mut module_maps: Vec<HashMap<u64, NodeId>> = Vec::with_capacity(modules.len());
+    let mut module_maps: Vec<HashMap<UsirLocalId, NodeId>> = Vec::with_capacity(modules.len());
     let mut callables_by_name: HashMap<String, Vec<NodeId>> = HashMap::new();
 
     for module in modules {
-        let mut local_to_global: HashMap<u64, NodeId> = HashMap::new();
+        let mut local_to_global: HashMap<UsirLocalId, NodeId> = HashMap::new();
 
         for entity in &module.entities {
             let node_id = NodeId(next_node_id);
@@ -47,13 +47,13 @@ pub fn usir_to_graph(modules: &[UsirModule]) -> Result<Box<dyn GraphView>> {
     for (module, local_to_global) in modules.iter().zip(&module_maps) {
         for relation in &module.relations {
             let from = *local_to_global.get(&relation.from).ok_or_else(|| {
-                S4Error::Other(format!(
+                S4Error::InvalidId(format!(
                     "USIR relation source entity {} not found in module {}",
                     relation.from, module.name
                 ))
             })?;
             let to = *local_to_global.get(&relation.to).ok_or_else(|| {
-                S4Error::Other(format!(
+                S4Error::InvalidId(format!(
                     "USIR relation target entity {} not found in module {}",
                     relation.to, module.name
                 ))
@@ -72,16 +72,18 @@ pub fn usir_to_graph(modules: &[UsirModule]) -> Result<Box<dyn GraphView>> {
             let Some(targets) = callables_by_name.get(&unresolved.callee_name) else {
                 continue;
             };
-            for &to in targets {
-                if to == from {
-                    continue;
-                }
-                builder.add_edge(Edge {
-                    from,
-                    to,
-                    kind: EdgeKind::Calls,
-                })?;
+            if targets.len() != 1 {
+                continue;
             }
+            let to = targets[0];
+            if to == from {
+                continue;
+            }
+            builder.add_edge(Edge {
+                from,
+                to,
+                kind: EdgeKind::Calls,
+            })?;
         }
     }
 
@@ -111,7 +113,7 @@ fn map_relation_kind(kind: &UsirRelationKind) -> EdgeKind {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use s4_parser::usir::{UnresolvedCall, UsirEntity, UsirRelation};
+    use s4_parser::usir::{UnresolvedCall, UsirEntity, UsirLocalId, UsirRelation};
 
     #[test]
     fn cross_module_unresolved_call_becomes_edge() {
@@ -120,25 +122,25 @@ mod tests {
                 name: "a.java".into(),
                 entities: vec![
                     UsirEntity {
-                        id: 0,
+                        id: UsirLocalId(0),
                         kind: UsirEntityKind::Module,
                         name: "a.java".into(),
                         signature: None,
                     },
                     UsirEntity {
-                        id: 1,
+                        id: UsirLocalId(1),
                         kind: UsirEntityKind::Callable,
                         name: "caller".into(),
                         signature: Some("caller():void".into()),
                     },
                 ],
                 relations: vec![UsirRelation {
-                    from: 0,
-                    to: 1,
+                    from: UsirLocalId(0),
+                    to: UsirLocalId(1),
                     kind: UsirRelationKind::Defines,
                 }],
                 unresolved_calls: vec![UnresolvedCall {
-                    from: 1,
+                    from: UsirLocalId(1),
                     callee_name: "scale".into(),
                 }],
             },
@@ -146,21 +148,21 @@ mod tests {
                 name: "b.java".into(),
                 entities: vec![
                     UsirEntity {
-                        id: 0,
+                        id: UsirLocalId(0),
                         kind: UsirEntityKind::Module,
                         name: "b.java".into(),
                         signature: None,
                     },
                     UsirEntity {
-                        id: 1,
+                        id: UsirLocalId(1),
                         kind: UsirEntityKind::Callable,
                         name: "scale".into(),
                         signature: Some("scale(int):int".into()),
                     },
                 ],
                 relations: vec![UsirRelation {
-                    from: 0,
-                    to: 1,
+                    from: UsirLocalId(0),
+                    to: UsirLocalId(1),
                     kind: UsirRelationKind::Defines,
                 }],
                 unresolved_calls: vec![],

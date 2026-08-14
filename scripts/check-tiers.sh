@@ -11,8 +11,9 @@ tier_of() {
     s4-core) echo 0 ;;
     s4-storage|s4-events|s4-plugin|s4-project) echo 1 ;;
     s4-parser|s4-graph|s4-knowledge|s4-requirements|s4-metrics|s4-analysis) echo 2 ;;
-    s4-planner|s4-verification|s4-certification|s4-llm) echo 3 ;;
-    s4-api|s4-cli|s4-ui) echo 4 ;;
+    s4-verification|s4-certification|s4-llm) echo 3 ;;
+    s4-cli) echo 4 ;;
+    s4-planner|s4-api|s4-ui) echo parked ;;
     *) echo "" ;;
   esac
 }
@@ -23,6 +24,9 @@ for crate_dir in crates/s4-*; do
   cargo_toml="$crate_dir/Cargo.toml"
   [ -f "$cargo_toml" ] || continue
   my_tier="$(tier_of "$crate")"
+  if [ "$my_tier" = "parked" ]; then
+    continue
+  fi
   if [ -z "$my_tier" ]; then
     echo "error: unknown crate tier for $crate" >&2
     errors=$((errors + 1))

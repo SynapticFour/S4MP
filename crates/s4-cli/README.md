@@ -66,14 +66,15 @@ s4 source list
 
 | Command | Description |
 |---------|-------------|
-| `graph build --source <alias> [--out-dir .s4/graphs]` | Parse source → USIR → semantic graph |
+| `graph build --source <alias> [--out-dir .s4/graphs] [--force] [--refresh]` | Parse source → USIR → semantic graph |
 | `graph export --source <alias> [--format dot] [--filter …] [-o <file>]` | Export DOT or JSON (default: `.s4/exports/<alias>.{dot,json}`) |
+| `graph diff --left <alias> --right <alias>` | Structural `(kind, label)` diff of two built graphs |
 
 Pipeline steps for `graph build` (with terminal feedback):
 
-1. Resolve source (clone/fetch for Git)
-2. Physical snapshot → CAS
-3. Tree-sitter parse → USIR modules → CAS
+1. Resolve source (clone; `git fetch` only with `--refresh`)
+2. Physical snapshot → CAS (skip parse/lower when snapshot hash matches the last manifest, unless `--force`)
+3. Tree-sitter parse → USIR modules (kept in memory; CAS reuse by file hash; also written to CAS)
 4. Lower USIR → graph projection → CAS
 5. Write graph manifest JSON
 
@@ -133,11 +134,16 @@ The CLI reads/writes under `.s4/` in the current working directory:
 |------|------------|
 | `sources.json` | `source add` |
 | `cache/<alias>/` | Git ingest |
-| `store/<hex>.json` | All artifact writes |
-| `graphs/<alias>.json` | `graph build` |
-| `maps/<java>__<rust>.json` | `map suggest` |
-| `reports/diff-report.md` | `diff` (default) |
+| `store/<hex>.json` | CAS knowledge blobs |
+| `graphs/<alias>.json` | `graph build` (workspace pointer) |
+| `maps/<java>__<rust>.json` | `map suggest` (workspace pointer) |
+| `reports/diff-report.md` (+ `.json` sidecar) | `diff` (default) |
 | `exports/<alias>.dot` | `graph export` (default) |
+| `verification/` | `verify` |
+| `certificates/` | `certify` |
+| `knowledge/` | `knowledge extract` |
+| `proposals/` | `reason` |
+| `requirements.json` | `require` |
 
 Implementation: [`src/workspace.rs`](src/workspace.rs), command handlers in [`src/commands/`](src/commands/).
 

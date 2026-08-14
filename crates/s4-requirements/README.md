@@ -6,9 +6,10 @@ Requirements graph and traceability contracts.
 
 | Module | Purpose |
 |--------|---------|
+| `store` | **Live:** `RequirementsDocument` JSON store, OpenAPI import, name-based trace suggest |
 | `requirement` | `Requirement`, `RequirementKind` |
 | `trace` | `TraceLink`, `TraceabilityGraph` trait |
-| `constraint` | `Constraint` |
+| `constraint` | `Constraint` (type only) |
 
 ## Tier
 

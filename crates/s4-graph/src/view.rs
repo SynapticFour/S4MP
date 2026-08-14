@@ -12,6 +12,9 @@ pub trait GraphView: Send + Sync {
     /// Iterate all edges.
     fn edges(&self) -> Box<dyn Iterator<Item = &Edge> + '_>;
 
+    /// Iterate all nodes. IDs may be sparse; do not assume `0..node_count()`.
+    fn nodes(&self) -> Box<dyn Iterator<Item = &Node> + '_>;
+
     /// Number of nodes in the view.
     fn node_count(&self) -> usize;
 }

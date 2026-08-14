@@ -3,7 +3,7 @@
 use crate::metric::{Metric, MetricKind, MetricValue};
 use crate::MetricCollector;
 use s4_core::Result;
-use s4_graph::{EdgeKind, GraphView, NodeId, NodeKind};
+use s4_graph::{EdgeKind, GraphView, NodeKind};
 
 /// Collects simple counts from a [`GraphView`].
 #[derive(Clone, Debug, Default)]
@@ -27,14 +27,12 @@ impl BasicGraphMetrics {
         let mut callables = 0_i64;
         let mut types = 0_i64;
         let mut modules = 0_i64;
-        for index in 0..view.node_count() as u64 {
-            if let Some(node) = view.node(NodeId(index)) {
-                match node.kind {
-                    NodeKind::Callable => callables += 1,
-                    NodeKind::Type => types += 1,
-                    NodeKind::Module => modules += 1,
-                    _ => {},
-                }
+        for node in view.nodes() {
+            match node.kind {
+                NodeKind::Callable => callables += 1,
+                NodeKind::Type => types += 1,
+                NodeKind::Module => modules += 1,
+                _ => {},
             }
         }
         let calls = i64::try_from(view.edges().filter(|e| e.kind == EdgeKind::Calls).count())
@@ -92,7 +90,7 @@ impl MetricCollector for BasicGraphMetrics {
 mod tests {
     use super::*;
     use s4_graph::memory::InMemoryGraphView;
-    use s4_graph::{Edge, Node};
+    use s4_graph::{Edge, Node, NodeId};
 
     #[test]
     fn collects_callable_and_call_counts() {

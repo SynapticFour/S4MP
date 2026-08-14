@@ -12,4 +12,7 @@ pub struct ParseUnit {
     pub content: Option<ArtifactId>,
     /// Optional inline source text. When set, takes precedence over reading `path`.
     pub source_text: Option<String>,
+    /// Blake3 hex of the file contents from the physical snapshot, when known.
+    /// Used to reuse persisted USIR artifacts across graph rebuilds.
+    pub source_hash: Option<String>,
 }

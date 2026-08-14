@@ -44,7 +44,7 @@ pub fn evaluate_policy(policy: &CertificationPolicy, run: &VerificationRun) -> P
             other if other.starts_with("min_coverage:") => other
                 .strip_prefix("min_coverage:")
                 .and_then(|s| s.parse::<f32>().ok())
-                .is_some_and(|min| run.coverage_pct + f32::EPSILON >= min),
+                .is_some_and(|min| run.coverage_pct >= min),
             other => {
                 notes.push(format!("unknown rule_ref '{other}' treated as fail"));
                 false

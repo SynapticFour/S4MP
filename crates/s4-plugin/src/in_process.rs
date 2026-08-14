@@ -42,10 +42,10 @@ impl InProcessPluginHost {
         let required = parse_api_version(&manifest.api_version)?;
         let current = ApiVersion::CURRENT;
         if !current.is_compatible_with(&required) {
-            return Err(S4Error::Other(format!(
-                "plugin '{}' requires API {}, host provides {}",
-                manifest.name, required, current
-            )));
+            return Err(S4Error::Plugin {
+                plugin_id: manifest.name.clone(),
+                message: format!("requires API {required}, host provides {current}"),
+            });
         }
         Ok(())
     }
@@ -56,7 +56,10 @@ impl PluginHost for InProcessPluginHost {
         Self::check_api_compatible(&manifest)?;
         let key = manifest.name.clone();
         if self.manifests.contains_key(&key) {
-            return Err(S4Error::Other(format!("plugin already registered: {key}")));
+            return Err(S4Error::Plugin {
+                plugin_id: key.clone(),
+                message: "plugin already registered".into(),
+            });
         }
         self.manifests.insert(key, manifest);
         Ok(())
@@ -75,14 +78,14 @@ fn parse_api_version(raw: &str) -> Result<ApiVersion> {
     let mut parts = raw.trim().trim_start_matches('v').split('.');
     let major = parts
         .next()
-        .ok_or_else(|| S4Error::Other(format!("invalid api_version '{raw}'")))?
+        .ok_or_else(|| S4Error::InvalidId(format!("invalid api_version '{raw}'")))?
         .parse::<u32>()
-        .map_err(|_| S4Error::Other(format!("invalid api_version major in '{raw}'")))?;
+        .map_err(|_| S4Error::InvalidId(format!("invalid api_version major in '{raw}'")))?;
     let minor = parts
         .next()
         .unwrap_or("0")
         .parse::<u32>()
-        .map_err(|_| S4Error::Other(format!("invalid api_version minor in '{raw}'")))?;
+        .map_err(|_| S4Error::InvalidId(format!("invalid api_version minor in '{raw}'")))?;
     Ok(ApiVersion { major, minor })
 }
 

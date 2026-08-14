@@ -1,6 +1,10 @@
 //! # s4-certification
 //!
 //! Certification and compliance contracts with immutable audit trails.
+//!
+//! The live Phase 5 path is [`evaluate::evaluate_policy`] / [`evaluate::certificate_from_evaluation`]
+//! over [`s4_verification::VerificationRun`]. [`CertificateIssuer`] remains a contract for a
+//! future issuer plugin and is not used by `s4 certify`.
 
 #![warn(missing_docs)]
 

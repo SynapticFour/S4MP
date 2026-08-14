@@ -10,7 +10,6 @@ authors.workspace = true
 
 [dependencies]
 s4-core = { workspace = true }
-s4-plugin = { workspace = true }
 s4-storage = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

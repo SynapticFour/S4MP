@@ -49,7 +49,11 @@ pub fn run_suggest(java: &str, rust: &str) -> Result<()> {
         suggested.len()
     );
 
-    let existing = load_existing_entries(&ws, java, rust).unwrap_or_default();
+    let existing = if ws.map_manifest_path(java, rust).is_file() {
+        load_existing_entries(&ws, java, rust)?
+    } else {
+        Vec::new()
+    };
     let merged = merge_correspondences(existing, suggested);
 
     let mut store = ws.store()?;
@@ -87,7 +91,7 @@ pub fn run_reject(id: &str) -> Result<()> {
     let index = entries
         .iter()
         .position(|e| e.id == id)
-        .ok_or_else(|| s4_core::S4Error::Other(format!("correspondence id not found: {id}")))?;
+        .ok_or_else(|| s4_core::S4Error::InvalidId(format!("correspondence id not found: {id}")))?;
 
     let removed = entries.remove(index);
     if let Some(source_node) = removed.source_node {
@@ -100,6 +104,7 @@ pub fn run_reject(id: &str) -> Result<()> {
                 confidence: 0.0,
                 method: CorrespondenceMethod::Manual,
                 note: Some("rejected via s4 map reject".to_string()),
+                display_name: removed.display_name,
                 stale: false,
             });
         }
@@ -156,7 +161,7 @@ fn update_entry(id: &str, mutator: impl FnOnce(&mut CorrespondenceEntry)) -> Res
     let entry = entries
         .iter_mut()
         .find(|e| e.id == id)
-        .ok_or_else(|| s4_core::S4Error::Other(format!("correspondence id not found: {id}")))?;
+        .ok_or_else(|| s4_core::S4Error::InvalidId(format!("correspondence id not found: {id}")))?;
     mutator(entry);
     let status = entry.status;
     persist_map(&ws, &manifest, &entries)?;
@@ -175,7 +180,7 @@ fn find_map_containing(
             return Ok((manifest, entries));
         }
     }
-    Err(s4_core::S4Error::Other(format!(
+    Err(s4_core::S4Error::InvalidId(format!(
         "correspondence id not found in any map: {id}"
     )))
 }

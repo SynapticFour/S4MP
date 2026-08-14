@@ -136,7 +136,12 @@ fn collect_field_symbols(node: Node<'_>, source: &str, builder: &mut UsirModuleB
     }
 }
 
-fn add_type_references(from: u64, node: Node<'_>, source: &str, builder: &mut UsirModuleBuilder) {
+fn add_type_references(
+    from: crate::UsirLocalId,
+    node: Node<'_>,
+    source: &str,
+    builder: &mut UsirModuleBuilder,
+) {
     for type_name in collect_type_names(node, source) {
         builder.reference_type(from, &type_name);
     }

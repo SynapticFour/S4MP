@@ -10,9 +10,10 @@ Architecture extraction, feature extraction, and cross-graph analysis.
 | `lowering` | `usir_to_graph` — USIR modules → semantic graph |
 | `correspondence` | `GraphId`, `CorrespondenceEntry`, `suggest_correspondences`, `load/save/merge` |
 | `diff_report` | `DiffReport`, `build_diff_report`, `render_markdown` |
-| `architecture` | `ArchitectureAnalyzer`, `Boundary`, `Pattern` |
-| `feature` | `Feature`, `FeatureExtractor` trait |
-| `pipeline` | `AnalysisPipeline` trait |
+| `pass` | `Pass`, `PassPipeline`, `PORTING_PASS_ORDER` (`s4 analyze` runs this pipeline) |
+| `architecture` | `ArchitectureAnalyzer`, `Boundary`, `Pattern` (contracts) |
+| `feature` | `Feature`, `FeatureExtractor` trait (contracts) |
+| `pipeline` | `AnalysisPipeline` trait (contract) |
 
 ## Porting pipeline role
 
@@ -25,12 +26,15 @@ Architecture extraction, feature extraction, and cross-graph analysis.
 
 See [Porting Workflow Guide](../../docs/guides/PORTING_WORKFLOW.md) for end-to-end usage.
 
-### Correspondence heuristics (v1)
+### Correspondence heuristics (v2)
 
-- Tokenized name Jaccard similarity (callable↔callable, type↔type)
-- Threshold ≥ 0.5 → `Diverged` + `NameHeuristic` (never auto-`Ported`)
-- Unmatched Java nodes → `MissingInTarget`
-- Unmatched Rust nodes → `ExtraInTarget`
+- Tokenized name Jaccard, optional signature Jaccard (`0.6 * name + 0.4 * signature`)
+- Tokens are computed **once per node**; an inverted token index prunes candidates
+- Assignment is **exclusive** (greedy by descending score)
+- Empty/`<anonymous>` labels are skipped; empty-empty Jaccard is 0
+- Threshold ≥ 0.5 → `Diverged` (never auto-`Ported`)
+- Unmatched Java nodes → `MissingInTarget`; unmatched Rust → `ExtraInTarget`
+- `coverage_pct` is **ported callables / Java callables** (types do not inflate coverage)
 
 ## Tier
 

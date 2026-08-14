@@ -21,8 +21,10 @@ The default v1 store implementation used by `s4-cli`:
 
 - Root: `.s4/store/` (one JSON file per artifact)
 - Path pattern: `.s4/store/<blake3-hex>.json`
-- Content-addressed: `Artifact::id()` derived from serialized envelope
+- Content-addressed: `Artifact::id()` / `canonical_bytes()` — compact JSON of the envelope (the bytes written to disk)
+- Atomic writes: temp file + rename
 - Idempotent writes: existing IDs are not overwritten
+- `StoreWriter::write_at` stores index records (e.g. `UsirCache`) at a predetermined id
 
 ```rust
 use s4_storage::{FileSystemStore, StoreWriter};
@@ -41,6 +43,7 @@ Used by the [Porting Workflow](../../docs/guides/PORTING_WORKFLOW.md) for USIR m
 | `UsirModule` | `s4-parser` plugins |
 | `GraphProjection` | `s4-cli graph` |
 | `CorrespondenceMap` | `s4-analysis::save_correspondence_map` |
+| `UsirCache` | parser per-file USIR index (`write_at`) |
 
 ## Tier
 

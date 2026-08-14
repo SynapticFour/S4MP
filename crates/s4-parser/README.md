@@ -1,22 +1,24 @@
 # s4-parser
 
-Universal parsing orchestration contracts.
+Universal parsing orchestration and in-tree Tree-sitter frontends.
 
 ## Responsibility
 
-Defines parse units, language identifiers, USIR module contracts, and parse pipeline traits. Language-specific parsing is delegated to plugins.
+Defines parse units, USIR module contracts, and parse pipeline traits. Java and Rust v1 frontends live in this crate (`plugins`); they implement `ParsePipeline`, not `s4_plugin::Parser`.
 
 ## Public API
 
 | Module | Purpose |
 |--------|---------|
-| `language` | `LanguageId` |
+| `language` | `LanguageId` (re-export of `s4_core::LanguageId`) |
 | `unit` | `ParseUnit` |
 | `usir` | `UsirModule`, entity/relation kinds |
 | `pipeline` | `ParsePipeline`, `ParseContext` |
-| `plugins` | `JavaParser`, `RustParser` (tree-sitter v1 frontends) |
+| `plugins` | `JavaParser`, `RustParser`, `parse_all_parallel` |
 
-Used by `s4 graph` in the [Porting Workflow](../../docs/guides/PORTING_WORKFLOW.md). v1 extraction is heuristic (intra-file call detection, no full type system).
+Used by `s4 graph`. v1 extraction is heuristic (intra-file `name(` call detection, no full type system). Overloads of the same name are kept; cross-module unresolved calls link only when the callee name is unique.
+
+`parse_all_parallel` extracts with bounded threads then persists sequentially. When `ParseUnit::source_hash` is set, USIR artifacts are reused from CAS via a `usir_cache` index record. `s4 graph build` also skips the whole parse when the physical snapshot hash is unchanged.
 
 ## Tier
 

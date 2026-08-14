@@ -19,7 +19,7 @@ Defines how S4MP projects are opened, configured, locked, and referenced by snap
 
 ## Source ingestion
 
-`DefaultSourceIngestor` resolves [`SourceRef`](src/source.rs) definitions:
+`DefaultSourceIngestor` resolves [`SourceRef`](src/source.rs) definitions. Existing Git caches are reused without `git fetch` unless constructed with `with_refresh(true)` (`s4 graph build --refresh` / `s4 source add --refresh`). Aliases must match `[A-Za-z0-9_-]+`; git subpaths must be relative with no `..`.
 
 | Origin | Behavior |
 |--------|----------|

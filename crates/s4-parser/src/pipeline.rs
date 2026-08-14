@@ -20,7 +20,11 @@ pub trait ParsePipeline: Send + Sync {
     /// Returns an error if parsing fails.
     fn parse_unit(&self, unit: &ParseUnit, ctx: &mut ParseContext<'_>) -> Result<Vec<ArtifactId>>;
 
-    /// Parse all units incrementally, reusing cached artifacts where valid.
+    /// Parse all units sequentially.
+    ///
+    /// Incremental CAS reuse is handled by `parse_all_parallel` (per-file hash)
+    /// and `s4 graph build` (skip when the physical snapshot hash is unchanged).
+    /// This sequential default does not look up cached artifacts.
     ///
     /// # Errors
     ///

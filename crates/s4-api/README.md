@@ -1,6 +1,6 @@
 # s4-api
 
-HTTP and gRPC API contracts for remote S4MP access.
+**Parked** — not a default workspace member. HTTP and gRPC API **contracts** (no server). Re-add to `Cargo.toml` members when a server exists.
 
 ## Public API
 

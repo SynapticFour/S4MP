@@ -17,7 +17,9 @@
             "graph_projection",
             "analysis_finding",
             "reason_proposal",
-            "certificate"
+            "certificate",
+            "correspondence_map",
+            "usir_cache"
           ]
         },
         {

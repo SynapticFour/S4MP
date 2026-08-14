@@ -12,15 +12,12 @@ members = [
     "crates/s4-requirements",
     "crates/s4-metrics",
     "crates/s4-analysis",
-    "crates/s4-planner",
     "crates/s4-verification",
     "crates/s4-certification",
     "crates/s4-llm",
-    "crates/s4-api",
     "crates/s4-cli",
-    "crates/s4-ui",
 ]
-exclude = []
+exclude = ["crates/s4-api", "crates/s4-ui", "crates/s4-planner"]
 
 [workspace.package]
 version = "0.1.0"
@@ -43,12 +40,9 @@ s4-knowledge = { path = "crates/s4-knowledge" }
 s4-requirements = { path = "crates/s4-requirements" }
 s4-metrics = { path = "crates/s4-metrics" }
 s4-analysis = { path = "crates/s4-analysis" }
-s4-planner = { path = "crates/s4-planner" }
 s4-verification = { path = "crates/s4-verification" }
 s4-certification = { path = "crates/s4-certification" }
 s4-llm = { path = "crates/s4-llm" }
-s4-api = { path = "crates/s4-api" }
-s4-ui = { path = "crates/s4-ui" }
 
 # External
 walkdir = "2"

@@ -1,4 +1,4 @@
-use crate::{EdgeKind, GraphView, Node, NodeId, NodeKind};
+use crate::{EdgeKind, GraphView, Node, NodeKind};
 use s4_core::{Result, S4Error};
 
 /// Result of a graph query.
@@ -52,7 +52,7 @@ impl QueryExpr {
         if let Some(sub) = expr.strip_prefix("label~") {
             return Ok(Self::LabelContains(sub.to_ascii_lowercase()));
         }
-        Err(S4Error::Other(format!(
+        Err(S4Error::InvalidInput(format!(
             "unsupported query '{expression}' (expected all | kind:<k> | label~<substr>)"
         )))
     }
@@ -65,7 +65,9 @@ fn parse_node_kind(raw: &str) -> Result<NodeKind> {
         "module" => Ok(NodeKind::Module),
         "symbol" => Ok(NodeKind::Symbol),
         "package" => Ok(NodeKind::Package),
-        other => Err(S4Error::Other(format!("unknown node kind '{other}'"))),
+        other => Err(S4Error::InvalidInput(format!(
+            "unknown node kind '{other}'"
+        ))),
     }
 }
 
@@ -77,10 +79,7 @@ impl GraphQuery for FilterQuery {
     fn execute(&self, view: &dyn GraphView, expression: &str) -> Result<QueryResult> {
         let parsed = QueryExpr::parse(expression)?;
         let mut nodes = Vec::new();
-        for index in 0..view.node_count() as u64 {
-            let Some(node) = view.node(NodeId(index)) else {
-                continue;
-            };
+        for node in view.nodes() {
             let matched = match &parsed {
                 QueryExpr::All => true,
                 QueryExpr::MatchKind(kind) => &node.kind == kind,
@@ -129,20 +128,16 @@ impl GraphDiff {
 }
 
 fn node_keys(view: &dyn GraphView) -> std::collections::BTreeSet<(NodeKind, String)> {
-    let mut keys = std::collections::BTreeSet::new();
-    for index in 0..view.node_count() as u64 {
-        if let Some(node) = view.node(NodeId(index)) {
-            keys.insert((node.kind.clone(), node.label.clone()));
-        }
-    }
-    keys
+    view.nodes()
+        .map(|node| (node.kind.clone(), node.label.clone()))
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::memory::InMemoryGraphView;
-    use crate::Node;
+    use crate::{Node, NodeId};
 
     #[test]
     fn filter_by_kind_and_label() {
@@ -202,5 +197,21 @@ mod tests {
         assert!(diff.only_left.is_empty());
         assert_eq!(diff.only_right.len(), 1);
         assert_eq!(diff.shared.len(), 1);
+    }
+
+    #[test]
+    fn filter_enumerates_sparse_ids() {
+        let view = InMemoryGraphView::new(
+            vec![Node {
+                id: NodeId(100),
+                kind: NodeKind::Callable,
+                label: "run".into(),
+                signature: None,
+            }],
+            vec![],
+        );
+        let result = FilterQuery.execute(&view, "kind:callable").unwrap();
+        assert_eq!(result.nodes.len(), 1);
+        assert_eq!(result.nodes[0].id.0, 100);
     }
 }

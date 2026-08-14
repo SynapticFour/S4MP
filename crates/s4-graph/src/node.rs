@@ -1,8 +1,20 @@
+use s4_core::EntityId;
 use serde::{Deserialize, Serialize};
 
 /// Opaque node identifier within a graph view.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Debug)]
 pub struct NodeId(pub u64);
+
+impl NodeId {
+    /// Snapshot-scoped knowledge id for traces that refer to this graph node.
+    ///
+    /// Distinct from USIR module-local ids. Do not mix identifiers across graphs
+    /// or snapshots.
+    #[must_use]
+    pub fn as_entity_id(self, graph: &str) -> EntityId {
+        EntityId::new(graph, self.0)
+    }
+}
 
 /// Graph node.
 #[derive(Clone, Debug, Serialize, Deserialize)]

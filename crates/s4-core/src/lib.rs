@@ -18,6 +18,8 @@ pub mod language;
 pub mod maturity;
 /// Common re-exports for workspace crates.
 pub mod prelude;
+/// UTC timestamps for provenance and events.
+pub mod time;
 /// Schema and plugin API versioning.
 pub mod version;
 
@@ -25,4 +27,5 @@ pub use error::{Result, S4Error};
 pub use id::{ArtifactId, EntityId, PluginId, ProjectId};
 pub use language::LanguageId;
 pub use maturity::{MATURITY, MATURITY_NOTICE};
+pub use time::{unix_secs_to_rfc3339, utc_rfc3339};
 pub use version::{ApiVersion, SchemaVersion};

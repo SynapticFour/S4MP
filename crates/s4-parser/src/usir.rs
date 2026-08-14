@@ -1,4 +1,19 @@
 use serde::{Deserialize, Serialize};
+use std::fmt;
+
+/// Local entity identifier within a single [`UsirModule`].
+///
+/// Distinct from graph `NodeId` (assigned at lowering) and knowledge `EntityId`
+/// (snapshot-scoped traces). Lowering maps these to node IDs with an explicit table.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Debug, Default)]
+#[serde(transparent)]
+pub struct UsirLocalId(pub u64);
+
+impl fmt::Display for UsirLocalId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 /// Universal Semantic IR module — stable interchange between parsers and analyzers.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -18,7 +33,7 @@ pub struct UsirModule {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UsirEntity {
     /// Local entity index.
-    pub id: u64,
+    pub id: UsirLocalId,
     /// Entity classification.
     pub kind: UsirEntityKind,
     /// Qualified or local name.
@@ -48,9 +63,9 @@ pub enum UsirEntityKind {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UsirRelation {
     /// Source entity index.
-    pub from: u64,
+    pub from: UsirLocalId,
     /// Target entity index.
-    pub to: u64,
+    pub to: UsirLocalId,
     /// Relation classification.
     pub kind: UsirRelationKind,
 }
@@ -75,7 +90,7 @@ pub enum UsirRelationKind {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UnresolvedCall {
     /// Local caller entity id.
-    pub from: u64,
+    pub from: UsirLocalId,
     /// Simple callee identifier (no package qualification in v1).
     pub callee_name: String,
 }

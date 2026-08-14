@@ -10,6 +10,10 @@ pub enum S4Error {
     #[error("invalid identifier: {0}")]
     InvalidId(String),
 
+    /// Invalid user input, flags, or configuration.
+    #[error("{0}")]
+    InvalidInput(String),
+
     /// Schema version mismatch between producer and consumer.
     #[error("schema version mismatch: expected {expected}, got {actual}")]
     SchemaVersionMismatch {
@@ -32,7 +36,11 @@ pub enum S4Error {
     #[error("storage error: {0}")]
     Storage(String),
 
-    /// Catch-all for unclassified errors.
+    /// External process failure (git, etc.).
+    #[error("external command: {0}")]
+    External(String),
+
+    /// A verification or certification check did not pass.
     #[error("{0}")]
-    Other(String),
+    CheckFailed(String),
 }

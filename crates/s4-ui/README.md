@@ -1,6 +1,6 @@
 # s4-ui
 
-UI integration contracts (headless). Rendering implementations are separate.
+**Parked** — not a default workspace member. UI integration **contracts** (headless). Re-add to `Cargo.toml` members when a renderer exists.
 
 ## Public API
 

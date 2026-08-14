@@ -20,5 +20,6 @@ pub use pipeline::{ParseContext, ParsePipeline};
 pub use plugins::{extract_java_module, extract_rust_module, JavaParser, RustParser};
 pub use unit::ParseUnit;
 pub use usir::{
-    UnresolvedCall, UsirEntity, UsirEntityKind, UsirModule, UsirRelation, UsirRelationKind,
+    UnresolvedCall, UsirEntity, UsirEntityKind, UsirLocalId, UsirModule, UsirRelation,
+    UsirRelationKind,
 };

@@ -43,9 +43,10 @@ pub fn ensure_registered(plugin_id: &str) -> Result<()> {
         .manifest(&s4_core::PluginId(plugin_id.to_string()))
         .is_none()
     {
-        return Err(s4_core::S4Error::Other(format!(
-            "plugin not registered: {plugin_id}"
-        )));
+        return Err(s4_core::S4Error::Plugin {
+            plugin_id: plugin_id.to_string(),
+            message: "plugin not registered".into(),
+        });
     }
     Ok(())
 }

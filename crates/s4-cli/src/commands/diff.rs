@@ -27,13 +27,13 @@ pub fn run(java: &str, rust: &str, out: &str) -> Result<()> {
     println!(
         "  coverage: {:.1}% ({}/{} callables ported)",
         report.summary.coverage_pct,
-        report.summary.ported_count,
+        report.summary.ported_callable_count,
         report.summary.total_java_callables
     );
 
     if let Some(parent) = Path::new(out).parent() {
         std::fs::create_dir_all(parent).map_err(|e| {
-            s4_core::S4Error::Other(format!(
+            s4_core::S4Error::Storage(format!(
                 "failed to create report directory {}: {e}",
                 parent.display()
             ))
@@ -41,15 +41,16 @@ pub fn run(java: &str, rust: &str, out: &str) -> Result<()> {
     }
 
     let markdown = render_markdown(&report);
-    std::fs::write(out, &markdown)
-        .map_err(|e| s4_core::S4Error::Other(format!("failed to write diff report {out}: {e}")))?;
+    std::fs::write(out, &markdown).map_err(|e| {
+        s4_core::S4Error::Storage(format!("failed to write diff report {out}: {e}"))
+    })?;
 
     let json_path = json_sidecar_path(out);
     let json = render_json(&report).map_err(|e| {
-        s4_core::S4Error::Other(format!("failed to serialize JSON diff report: {e}"))
+        s4_core::S4Error::Storage(format!("failed to serialize JSON diff report: {e}"))
     })?;
     std::fs::write(&json_path, json).map_err(|e| {
-        s4_core::S4Error::Other(format!(
+        s4_core::S4Error::Storage(format!(
             "failed to write JSON diff report {}: {e}",
             json_path.display()
         ))

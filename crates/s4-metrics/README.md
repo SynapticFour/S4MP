@@ -6,8 +6,9 @@ Complexity analysis and software metrics contracts.
 
 | Module | Purpose |
 |--------|---------|
+| `basic` | **Live:** `BasicGraphMetrics` (callable/type/module/calls counts) |
 | `metric` | `Metric`, `MetricKind`, `MetricValue` |
-| `complexity` | `ComplexityMeasure`, `ComplexityAnalyzer` trait |
+| `complexity` | `ComplexityMeasure`, `ComplexityAnalyzer` trait (contract) |
 | `collector` | `MetricCollector` trait |
 
 ## Tier

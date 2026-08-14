@@ -2,9 +2,9 @@
 //!
 //! Content-addressed storage contracts for immutable S4MP artifacts.
 //!
-//! All cross-boundary data exchange flows through artifact IDs. This crate
-//! defines the storage traits; filesystem and remote backends are provided
-//! by future implementation crates or plugins.
+//! Primary knowledge blobs (USIR, graphs, snapshots, correspondence maps) are
+//! content-addressed. Workspace pointers and human reports may live as sidecars
+//! under `.s4/` (see `s4-cli`).
 
 #![warn(missing_docs)]
 

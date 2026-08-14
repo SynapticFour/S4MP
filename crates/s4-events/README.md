@@ -11,8 +11,9 @@ Decouple platform subsystems through typed domain events (import completed, grap
 | Module | Purpose |
 |--------|---------|
 | `event` | `Event`, `EventKind` |
-| `bus` | `EventBus` trait |
-| `subscription` | `Subscription`, `EventHandler` |
+| `memory` | **Live:** `RecordingEventSink` (sync; RFC-3339 timestamps) |
+| `bus` | `EventBus` trait (contract; no impl yet) |
+| `subscription` | `Subscription`, `EventHandler` (contract) |
 
 ## Tier
 

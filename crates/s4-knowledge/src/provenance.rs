@@ -10,7 +10,7 @@ pub struct Provenance {
     pub source_id: String,
     /// Artifact that produced this fact.
     pub artifact_id: ArtifactId,
-    /// ISO-8601 timestamp.
+    /// RFC-3339 UTC timestamp.
     pub timestamp: String,
     /// Schema version at creation time.
     pub schema_version: SchemaVersion,

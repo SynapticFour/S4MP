@@ -1,7 +1,7 @@
 //! Markdown diff reports from cross-graph correspondence maps.
 
 use crate::correspondence::{CorrespondenceEntry, CorrespondenceStatus};
-use s4_graph::{GraphView, NodeId, NodeKind};
+use s4_graph::{GraphView, NodeKind};
 use serde::Serialize;
 use std::fmt::Write as _;
 
@@ -35,13 +35,15 @@ pub struct DiffSummary {
     pub total_java_types: usize,
     /// Entries with [`CorrespondenceStatus::Ported`].
     pub ported_count: usize,
+    /// Ported rows whose Java source node is a callable.
+    pub ported_callable_count: usize,
     /// Entries with [`CorrespondenceStatus::Diverged`].
     pub diverged_count: usize,
     /// Entries with [`CorrespondenceStatus::MissingInTarget`].
     pub missing_count: usize,
     /// Entries with [`CorrespondenceStatus::ExtraInTarget`].
     pub extra_count: usize,
-    /// `ported_count / total_java_callables` (0.0 when denominator is zero).
+    /// `ported_callable_count / total_java_callables` (0.0 when denominator is zero).
     pub coverage_pct: f32,
 }
 
@@ -76,13 +78,12 @@ pub fn build_diff_report(
     let mut unmapped = Vec::new();
 
     for entry in entries {
-        let entry = with_display_label(entry.clone(), java_graph);
         match entry.status {
-            CorrespondenceStatus::Ported => ported.push(entry),
-            CorrespondenceStatus::Diverged => diverged.push(entry),
-            CorrespondenceStatus::MissingInTarget => missing_in_target.push(entry),
-            CorrespondenceStatus::ExtraInTarget => extra_in_target.push(entry),
-            CorrespondenceStatus::Unmapped => unmapped.push(entry),
+            CorrespondenceStatus::Ported => ported.push(entry.clone()),
+            CorrespondenceStatus::Diverged => diverged.push(entry.clone()),
+            CorrespondenceStatus::MissingInTarget => missing_in_target.push(entry.clone()),
+            CorrespondenceStatus::ExtraInTarget => extra_in_target.push(entry.clone()),
+            CorrespondenceStatus::Unmapped => unmapped.push(entry.clone()),
         }
     }
 
@@ -93,6 +94,10 @@ pub fn build_diff_report(
     sort_by_target_id(&mut extra_in_target);
 
     let ported_count = ported.len();
+    let ported_callable_count = ported
+        .iter()
+        .filter(|entry| is_java_callable(entry, java_graph))
+        .count();
     let diverged_count = diverged.len();
     let missing_count = missing_in_target.len();
     let extra_count = extra_in_target.len();
@@ -102,7 +107,7 @@ pub fn build_diff_report(
     } else {
         #[allow(clippy::cast_precision_loss)]
         {
-            ported_count as f32 / total_java_callables as f32 * 100.0
+            ported_callable_count as f32 / total_java_callables as f32 * 100.0
         }
     };
 
@@ -118,6 +123,7 @@ pub fn build_diff_report(
             total_java_callables,
             total_java_types,
             ported_count,
+            ported_callable_count,
             diverged_count,
             missing_count,
             extra_count,
@@ -164,7 +170,7 @@ pub fn render_markdown(report: &DiffReport) -> String {
     let _ = writeln!(out, "| Extra in Rust | {} |", report.summary.extra_count);
     let _ = write!(
         out,
-        "| Coverage (ported / callables) | {:.1}% |\n\n",
+        "| Coverage (ported callables / Java callables) | {:.1}% |\n\n",
         report.summary.coverage_pct
     );
 
@@ -267,48 +273,50 @@ pub fn confidence_bands(diverged: &[CorrespondenceEntry]) -> ConfidenceBands {
 fn count_java_nodes(graph: &dyn GraphView) -> (usize, usize) {
     let mut callables = 0_usize;
     let mut types = 0_usize;
-    for index in 0..graph.node_count() as u64 {
-        if let Some(node) = graph.node(NodeId(index)) {
-            match node.kind {
-                NodeKind::Callable => callables += 1,
-                NodeKind::Type => types += 1,
-                _ => {},
-            }
+    for node in graph.nodes() {
+        match node.kind {
+            NodeKind::Callable => callables += 1,
+            NodeKind::Type => types += 1,
+            _ => {},
         }
     }
     (callables, types)
 }
 
+fn is_java_callable(entry: &CorrespondenceEntry, graph: &dyn GraphView) -> bool {
+    entry
+        .source_node
+        .as_ref()
+        .and_then(|node_ref| graph.node(node_ref.node))
+        .is_some_and(|node| node.kind == NodeKind::Callable)
+}
+
 fn sort_by_source_label(entries: &mut [CorrespondenceEntry], graph: &dyn GraphView) {
-    entries.sort_by_key(|entry| source_label(entry, graph));
+    entries.sort_by_cached_key(|entry| source_label(entry, graph));
 }
 
 fn sort_by_target_id(entries: &mut [CorrespondenceEntry]) {
     entries.sort_by_key(|e| e.target_node.as_ref().map_or(0, |n| n.node.0));
 }
 
-fn with_display_label(
-    mut entry: CorrespondenceEntry,
-    graph: &dyn GraphView,
-) -> CorrespondenceEntry {
-    if entry.note.is_none() {
-        entry.note = Some(resolve_display_name(&entry, graph));
-    }
-    entry
-}
-
 fn source_label(entry: &CorrespondenceEntry, graph: &dyn GraphView) -> String {
     entry
-        .source_node
-        .as_ref()
-        .and_then(|node_ref| graph.node(node_ref.node))
-        .map_or_else(
-            || resolve_display_name(entry, graph),
-            |node| node.label.clone(),
-        )
+        .display_name
+        .clone()
+        .or_else(|| {
+            entry
+                .source_node
+                .as_ref()
+                .and_then(|node_ref| graph.node(node_ref.node))
+                .map(|node| node.label.clone())
+        })
+        .unwrap_or_else(|| resolve_display_name(entry, graph))
 }
 
 fn resolve_display_name(entry: &CorrespondenceEntry, graph: &dyn GraphView) -> String {
+    if let Some(name) = entry.display_name.as_deref().filter(|s| !s.is_empty()) {
+        return name.to_string();
+    }
     if let Some(source) = &entry.source_node {
         if let Some(node) = graph.node(source.node) {
             return node.label.clone();
@@ -322,7 +330,11 @@ fn resolve_display_name(entry: &CorrespondenceEntry, graph: &dyn GraphView) -> S
 }
 
 fn entry_line_name(entry: &CorrespondenceEntry) -> String {
-    entry.note.clone().unwrap_or_else(|| entry.id.clone())
+    entry
+        .display_name
+        .clone()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| entry.id.clone())
 }
 
 #[cfg(test)]
@@ -330,7 +342,7 @@ mod tests {
     use super::*;
     use crate::correspondence::{CorrespondenceMethod, NodeRef};
     use s4_graph::memory::InMemoryGraphView;
-    use s4_graph::{Node, NodeKind};
+    use s4_graph::{Node, NodeId, NodeKind};
 
     fn sample_graph() -> InMemoryGraphView {
         InMemoryGraphView::new(
@@ -367,6 +379,7 @@ mod tests {
                 confidence: 1.0,
                 method: CorrespondenceMethod::Manual,
                 note: None,
+                display_name: Some("alpha".into()),
                 stale: false,
             },
             CorrespondenceEntry {
@@ -380,6 +393,7 @@ mod tests {
                 confidence: 0.0,
                 method: CorrespondenceMethod::NameHeuristic,
                 note: None,
+                display_name: Some("beta".into()),
                 stale: false,
             },
         ];
@@ -387,6 +401,7 @@ mod tests {
         let report = build_diff_report("java", "rust", &entries, &graph);
         assert_eq!(report.summary.total_java_callables, 2);
         assert_eq!(report.summary.ported_count, 1);
+        assert_eq!(report.summary.ported_callable_count, 1);
         assert_eq!(report.summary.missing_count, 1);
         assert!((report.summary.coverage_pct - 50.0).abs() < f32::EPSILON);
 
@@ -395,5 +410,63 @@ mod tests {
         assert!(md.contains("heuristic-map-v2"));
         assert!(md.contains("## Fehlt im Rust-Port"));
         assert!(md.contains("Confidence bands"));
+        assert!(md.contains("alpha"));
+        assert!(!md.contains("manually confirmed") || md.contains("alpha"));
+    }
+
+    #[test]
+    fn coverage_counts_only_ported_callables() {
+        let graph = InMemoryGraphView::new(
+            vec![
+                Node {
+                    id: NodeId(0),
+                    kind: NodeKind::Callable,
+                    label: "alpha".to_string(),
+                    signature: None,
+                },
+                Node {
+                    id: NodeId(1),
+                    kind: NodeKind::Type,
+                    label: "Calc".to_string(),
+                    signature: None,
+                },
+            ],
+            vec![],
+        );
+        let entries = vec![
+            CorrespondenceEntry {
+                id: "fn".to_string(),
+                source_node: Some(NodeRef {
+                    graph: crate::correspondence::GraphId("java".to_string()),
+                    node: NodeId(0),
+                }),
+                target_node: None,
+                status: CorrespondenceStatus::Ported,
+                confidence: 1.0,
+                method: CorrespondenceMethod::Manual,
+                note: None,
+                display_name: Some("alpha".into()),
+                stale: false,
+            },
+            CorrespondenceEntry {
+                id: "ty".to_string(),
+                source_node: Some(NodeRef {
+                    graph: crate::correspondence::GraphId("java".to_string()),
+                    node: NodeId(1),
+                }),
+                target_node: None,
+                status: CorrespondenceStatus::Ported,
+                confidence: 1.0,
+                method: CorrespondenceMethod::Manual,
+                note: None,
+                display_name: Some("Calc".into()),
+                stale: false,
+            },
+        ];
+        let report = build_diff_report("java", "rust", &entries, &graph);
+        assert_eq!(report.summary.ported_count, 2);
+        assert_eq!(report.summary.ported_callable_count, 1);
+        assert_eq!(report.summary.total_java_callables, 1);
+        assert!((report.summary.coverage_pct - 100.0).abs() < f32::EPSILON);
     }
 }

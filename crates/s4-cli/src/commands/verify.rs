@@ -64,12 +64,12 @@ pub fn run(
 
     let out_dir = ws.root().join(".s4").join("verification");
     std::fs::create_dir_all(&out_dir)
-        .map_err(|e| S4Error::Other(format!("failed to create {}: {e}", out_dir.display())))?;
+        .map_err(|e| S4Error::Storage(format!("failed to create {}: {e}", out_dir.display())))?;
     let out: PathBuf = out_dir.join(format!("{java}__{rust}.json"));
     let bytes = serde_json::to_vec_pretty(&run)
-        .map_err(|e| S4Error::Other(format!("serialize verification run: {e}")))?;
+        .map_err(|e| S4Error::Storage(format!("serialize verification run: {e}")))?;
     std::fs::write(&out, bytes)
-        .map_err(|e| S4Error::Other(format!("write {}: {e}", out.display())))?;
+        .map_err(|e| S4Error::Storage(format!("write {}: {e}", out.display())))?;
 
     println!("{}", run.summary);
     println!("wrote {}", out.display());
@@ -79,6 +79,6 @@ pub fn run(
     if run.passed {
         Ok(())
     } else {
-        Err(S4Error::Other(run.summary))
+        Err(S4Error::CheckFailed(run.summary))
     }
 }

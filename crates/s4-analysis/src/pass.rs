@@ -18,6 +18,8 @@ pub struct PassOutcome {
 pub struct PassContext<'a> {
     /// Optional event sink (CLI pipelines).
     pub events: Option<&'a RecordingEventSink>,
+    /// Human-readable notes accumulated from pass outcomes.
+    pub notes: Vec<String>,
     /// Artifacts accumulated across passes (key → id).
     pub artifacts: BTreeMap<String, ArtifactId>,
 }
@@ -28,6 +30,7 @@ impl<'a> PassContext<'a> {
     pub fn new(events: Option<&'a RecordingEventSink>) -> Self {
         Self {
             events,
+            notes: Vec::new(),
             artifacts: BTreeMap::new(),
         }
     }
@@ -39,8 +42,9 @@ impl<'a> PassContext<'a> {
         }
     }
 
-    /// Merge pass artifacts into the shared map.
+    /// Merge pass artifacts and notes into the shared context.
     pub fn merge(&mut self, outcome: PassOutcome) {
+        self.notes.extend(outcome.notes);
         self.artifacts.extend(outcome.artifacts);
     }
 }
@@ -85,10 +89,6 @@ impl PassPipeline {
     pub fn run(&self, ctx: &mut PassContext<'_>) -> Result<()> {
         for pass in &self.passes {
             let outcome = pass.run(ctx)?;
-            for note in &outcome.notes {
-                // Callers may log; keep notes available via outcome merge only.
-                let _ = note;
-            }
             ctx.merge(outcome);
         }
         Ok(())
@@ -107,14 +107,8 @@ impl Default for PassPipeline {
     }
 }
 
-/// Canonical Phase 2 pass order for the porting slice (documentation + CLI).
-pub const PORTING_PASS_ORDER: &[&str] = &[
-    "physical_snapshot",
-    "parse_usir",
-    "lower_graph",
-    "suggest_map",
-    "diff_report",
-];
+/// Canonical Phase 2 pass order for the porting slice (CLI `s4 analyze`).
+pub const PORTING_PASS_ORDER: &[&str] = &["graph_build", "suggest_map", "diff_report"];
 
 #[cfg(test)]
 mod tests {
@@ -150,5 +144,6 @@ mod tests {
         pipeline.run(&mut ctx).unwrap();
         assert_eq!(pipeline.names(), vec!["physical_snapshot", "parse_usir"]);
         assert_eq!(sink.len(), 2);
+        assert_eq!(ctx.notes, vec!["physical_snapshot", "parse_usir"]);
     }
 }

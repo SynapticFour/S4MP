@@ -1,4 +1,4 @@
-use s4_core::{ArtifactId, SchemaVersion};
+use s4_core::{ArtifactId, Result, S4Error, SchemaVersion};
 use serde::{Deserialize, Serialize};
 
 /// Typed artifact envelope stored in the CAS.
@@ -13,10 +13,41 @@ pub struct Artifact {
 }
 
 impl Artifact {
+    /// Canonical JSON bytes hashed to produce [`Artifact::id`].
+    ///
+    /// The store persists these exact bytes (compact JSON, not pretty-printed).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`S4Error::Storage`] if the envelope cannot be serialized.
+    pub fn canonical_bytes(&self) -> Result<Vec<u8>> {
+        serde_json::to_vec(self)
+            .map_err(|e| S4Error::Storage(format!("failed to serialize artifact envelope: {e}")))
+    }
+
     /// Derive the content-addressed identifier for this artifact.
-    #[must_use]
-    pub fn id(&self) -> ArtifactId {
-        ArtifactId::from_content(&serde_json::to_vec(self).unwrap_or_default())
+    ///
+    /// # Errors
+    ///
+    /// Returns [`S4Error::Storage`] if the envelope cannot be serialized.
+    pub fn id(&self) -> Result<ArtifactId> {
+        Ok(ArtifactId::from_content(&self.canonical_bytes()?))
+    }
+
+    /// Reject envelopes whose schema is not [`SchemaVersion::CURRENT`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`S4Error::SchemaVersionMismatch`] when versions differ.
+    pub fn expect_current_schema(&self) -> Result<()> {
+        if self.schema_version == SchemaVersion::CURRENT {
+            Ok(())
+        } else {
+            Err(S4Error::SchemaVersionMismatch {
+                expected: SchemaVersion::CURRENT.to_string(),
+                actual: self.schema_version.to_string(),
+            })
+        }
     }
 }
 
@@ -40,6 +71,8 @@ pub enum ArtifactKind {
     Certificate,
     /// Cross-graph node correspondence map (Java↔Rust porting, etc.).
     CorrespondenceMap,
+    /// Correspondence map cache pointer (deterministic id, not a content hash of the payload).
+    UsirCache,
     /// Plugin-defined extension kind.
     Extension(String),
 }

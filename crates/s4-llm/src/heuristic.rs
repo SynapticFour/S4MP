@@ -48,7 +48,7 @@ impl HeuristicLlmProvider {
         let model = ModelMetadata {
             provider_id: Self::ID.to_string(),
             model_id: Self::MODEL_ID.to_string(),
-            prompt_hash: hex32(ArtifactId::from_content(rationale_bytes.as_bytes()).as_bytes()),
+            prompt_hash: hex32(rationale.as_bytes()),
             response_hash: hex32(ArtifactId::from_content(response_body.as_bytes()).as_bytes()),
         };
         Ok(Proposal::proposed(kind, claims, rationale, Some(model)))

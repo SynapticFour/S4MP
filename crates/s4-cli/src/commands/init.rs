@@ -14,7 +14,7 @@ use std::path::Path;
 pub fn run(path: &str) -> Result<()> {
     let root = Path::new(path);
     std::fs::create_dir_all(root).map_err(|e| {
-        S4Error::Other(format!(
+        S4Error::Storage(format!(
             "failed to create workspace root {}: {e}",
             root.display()
         ))

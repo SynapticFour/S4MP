@@ -99,32 +99,31 @@ This repository is a [Cargo workspace](https://doc.rust-lang.org/cargo/reference
 crates/
   s4-core            Foundation: IDs, errors, versioning
   s4-storage         Content-addressed artifact store
-  s4-events          Event bus contracts
-  s4-plugin          Plugin system contracts
+  s4-events          Event bus contracts (`RecordingEventSink` is the live impl)
+  s4-plugin          Plugin system contracts (`InProcessPluginHost` registers manifests)
   s4-project         Project workspace & source ingestion
   s4-parser          Universal parsing & USIR (Java/Rust v1)
   s4-graph           Universal code graph
-  s4-knowledge       Software knowledge graph contracts
+  s4-knowledge       Software knowledge graph (extract + proposed facts)
   s4-requirements    Requirements graph & traceability
-  s4-metrics         Complexity & metrics contracts
+  s4-metrics         Complexity & metrics (`basic` collector)
   s4-analysis        Lowering, correspondence, diff reports
-  s4-planner         Refactoring planning contracts
-  s4-verification    Verification & acceptance workflows
-  s4-certification   Certification & compliance
-  s4-llm             LLM-agnostic reasoning (interfaces only)
-  s4-api             HTTP/gRPC API contracts
+  s4-verification    Port-diff verification (`Verifier` trait is a future contract)
+  s4-certification   Policy evaluation (`CertificateIssuer` is a future contract)
+  s4-llm             LLM-agnostic reasoning (heuristic provider; network off)
   s4-cli             Command-line interface (`s4`)
-  s4-ui              UI integration contracts
 ```
+
+Parked (not built in the default workspace; types-only until a server/planner exists): `s4-planner`, `s4-api`, `s4-ui`.
 
 ## Dependency Tiers
 
 Dependency direction is strictly **inward**:
 
 ```
-Surfaces (s4-cli, s4-api, s4-ui)
+Surfaces (s4-cli)
     ↓
-Quality (s4-verification, s4-certification, s4-planner)
+Quality (s4-verification, s4-certification)
     ↓
 Capabilities (s4-parser, s4-metrics, s4-analysis, s4-llm, s4-requirements)
     ↓
@@ -181,7 +180,7 @@ See [Contributing](CONTRIBUTING.md) and [Engineering Standards](docs/engineering
 0. **Follow [Engineering Standards](docs/engineering/ENGINEERING_STANDARDS.md)** — all implementation must comply.
 1. **Traits and contracts first** — extend via documented public APIs; v1 porting pipeline is implemented in `s4-cli` + capability crates.
 2. **No LLM provider dependencies** — `s4-llm` defines interfaces; providers are plugins.
-3. **All cross-boundary I/O is artifact-ID based** — via `s4-storage`.
+3. **Primary knowledge artifacts are CAS** — USIR, graphs, snapshots, and correspondence maps go through `s4-storage`. Workspace pointers (source registry, manifests) and human reports may be sidecars under `.s4/`.
 4. **LLM outputs are always `Proposed` lifecycle** — see `s4-knowledge`.
 5. **Heuristic correspondences require manual confirmation** — never auto-certified as ported.
 
