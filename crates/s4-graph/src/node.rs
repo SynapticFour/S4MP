@@ -23,11 +23,25 @@ pub struct Node {
     pub id: NodeId,
     /// Node classification.
     pub kind: NodeKind,
-    /// Display label.
+    /// Display label (simple identifier; used for Jaccard matching).
     pub label: String,
     /// Optional signature (from USIR); used by correspondence v2.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub signature: Option<String>,
+    /// Qualified display name (`Type.method` / `Type::method`) when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub qualified: Option<String>,
+}
+
+impl Node {
+    /// Label shown in reports: qualified name when present, otherwise [`Self::label`].
+    #[must_use]
+    pub fn display_label(&self) -> &str {
+        match &self.qualified {
+            Some(qualified) if !qualified.is_empty() => qualified.as_str(),
+            _ => self.label.as_str(),
+        }
+    }
 }
 
 /// Standard node kinds. Extensions use the `Extension` variant.

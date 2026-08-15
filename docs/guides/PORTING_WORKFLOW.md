@@ -1,6 +1,6 @@
 # Java→Rust Porting Workflow (v1)
 
-This guide walks through the **end-to-end porting pipeline** shipped with S4MP v0.1: register sources, build semantic graphs, suggest cross-graph correspondences, and render a Markdown diff report.
+This guide walks through the **intended loop**: register two trees, build name graphs, review heuristic pairs **with ids**, confirm them, render a diff, then verify/certify coverage.
 
 It is aimed at beginners — no prior S4MP knowledge required beyond a working Rust toolchain.
 
@@ -9,11 +9,14 @@ It is aimed at beginners — no prior S4MP knowledge required beyond a working R
 | Step | Command | Output |
 |------|---------|--------|
 | Register sources | `s4 source add` | `.s4/sources.json` |
-| Build graphs | `s4 graph` | USIR modules + graph in CAS, manifest in `.s4/graphs/` |
-| Suggest mappings | `s4 map suggest` | Correspondence map in `.s4/maps/` |
-| Review diff | `s4 diff` | `.s4/reports/diff-report.md` |
+| Build graphs | `s4 graph build` | USIR + graph in CAS, manifest in `.s4/graphs/` |
+| Suggest mappings | `s4 map suggest` | Correspondence map in `.s4/maps/` (all pairs are `Diverged`) |
+| Review rows | `s4 map show` | Short id, Java↔Rust pairing, signatures, status |
+| Confirm a pair | `s4 map confirm --id` / `--name` | That row becomes `Ported` |
+| Diff report | `s4 diff` | `.s4/reports/diff-report.md` with `id=` on every row |
+| Coverage check | `s4 verify` / `s4 certify` | Thresholds over counters — **not** semantic equivalence |
 
-The pipeline uses **heuristic name matching** (Jaccard on tokenized identifiers). Every `Diverged` row must be manually confirmed before treating it as ported.
+Default `s4 certify` is Valid only with **≥1 Ported** row. Heuristic-only maps write `Invalid` and exit non-zero.
 
 ## Prerequisites
 
@@ -49,7 +52,29 @@ Running commands from the repository root creates a local `.s4/` directory (git-
   exports/                  # graph DOT/JSON/SVG exports
 ```
 
-## Option A — Makefile (Recommended for HaplotypeCaller)
+## Option A — Fixture (recommended first run)
+
+No network. Uses `tests/fixtures/mini-port/`.
+
+```bash
+make e2e-fixture
+```
+
+Or by hand against your own copies of those trees (see README “Your own trees”). After `map suggest`:
+
+```bash
+s4 map show --java mini-java --rust mini-rust --status diverged
+s4 map confirm --name add --java mini-java --rust mini-rust
+s4 diff --java mini-java --rust mini-rust
+s4 verify --java mini-java --rust mini-rust
+s4 certify --java mini-java --rust mini-rust
+```
+
+`map show` prints a 12-character id prefix. `map confirm --id` accepts that prefix when it is unique. `--name add` fails if two rows share that simple name — use `--id` or a qualified name (`Calculator.add`).
+
+You cannot confirm `ExtraInTarget` (Rust-only) or `MissingInTarget` (Java-only) rows. Those stay extras/missing until the other side exists or you reject a bad pairing.
+
+## Option B — Makefile (GATK HaplotypeCaller slice)
 
 The root [`Makefile`](../../Makefile) wraps the full pipeline with sensible defaults for the GATK HaplotypeCaller Java slice:
 
@@ -107,12 +132,14 @@ make clean-cache
 | `graph-export` | `graph-export-java`, `graph-export-rust` | Export DOT files to `.s4/exports/` |
 | `graph-export-svg` | `graph-export-rust` | Render `.s4/exports/hc-rust.svg` (requires Graphviz) |
 | `map` | `graph` | `s4 map suggest` |
+| `show` | `map` | `s4 map show` (short ids + pairings) |
 | `diff` | `map` | `s4 diff` → `.s4/reports/diff-report.md` |
+| `e2e-fixture` | — | Workspace tests for the mini-port review loop |
 | `open-report` | — | Print diff report path |
 | `install-hooks` | — | Enable local pre-commit checks (fmt, clippy, test) |
 | `clean-cache` | — | Remove `.s4/cache`, `.s4/store`, `.s4/graphs` |
 
-## Option B — CLI Only
+## Option C — CLI Only
 
 All Makefile steps map directly to `cargo run` invocations.
 
@@ -205,24 +232,27 @@ JSON export: `--format json` → `.s4/exports/hc-rust.json` (default naming)
 cargo run -p s4-cli -- map suggest --java gatk-java-hc --rust hc-rust
 ```
 
-List all maps:
+List maps (counts only) or **rows** (what you actually review):
 
 ```bash
 cargo run -p s4-cli -- map list
+cargo run -p s4-cli -- map show --java gatk-java-hc --rust hc-rust
+cargo run -p s4-cli -- map show --java gatk-java-hc --rust hc-rust --status diverged
 ```
 
-### 4. Manual review (optional)
+### 4. Manual review (required for certify)
 
-Confirm a suggested mapping (use id from `map list` or the diff report):
+Confirm a suggested mapping from `map show` or the diff report (`id=`):
 
 ```bash
-cargo run -p s4-cli -- map confirm --id <correspondence-id>
+cargo run -p s4-cli -- map confirm --id <12-char-prefix>
+cargo run -p s4-cli -- map confirm --name add --java gatk-java-hc --rust hc-rust
 ```
 
-Reject a heuristic pairing:
+Reject a heuristic pairing (becomes Missing in Rust):
 
 ```bash
-cargo run -p s4-cli -- map reject --id <correspondence-id>
+cargo run -p s4-cli -- map reject --id <12-char-prefix>
 ```
 
 Re-run `map suggest` after graph rebuilds; manual confirmations are preserved via `merge_correspondences`.
@@ -239,11 +269,21 @@ Default output: `.s4/reports/diff-report.md`. Override with `--out <path>`.
 
 Open `.s4/reports/diff-report.md` in your editor. Sections:
 
+- **How to review** — `map show` / `map confirm` commands
 - **Summary** — coverage metrics
-- **Fehlt im Rust-Port** — Java nodes with no Rust counterpart
-- **Vermutlich abweichend** — heuristic pairs needing review (with confidence)
-- **Zusätzlich im Rust-Port** — Rust-only nodes
-- **Bestätigt portiert** — manually confirmed mappings
+- **Missing in Rust** — Java nodes with no Rust counterpart (`id=`)
+- **Diverged (review these)** — heuristic pairs with Java↔Rust names, signatures, confidence, `id=`
+- **Extra in Rust** — Rust-only nodes
+- **Ported (manually confirmed)** — rows you confirmed
+
+### 6. Verify and certify (coverage only)
+
+```bash
+cargo run -p s4-cli -- verify --java gatk-java-hc --rust hc-rust
+cargo run -p s4-cli -- certify --java gatk-java-hc --rust hc-rust
+```
+
+Without a confirmed Ported row, certify writes `Invalid` and exits non-zero.
 
 ## Pipeline Internals (Brief)
 
@@ -274,11 +314,11 @@ Key crates:
 
 ## Limitations (v1)
 
-- **Name heuristics only** — no semantic or type-signature equivalence.
+- **Name heuristics only** — no semantic or type-system equivalence. Signatures are Jaccard tokens, not a type checker.
 - **Heuristic suggestions are `Diverged`**, never auto-`Ported`.
-- **Single-file module scope** — call detection is intra-file substring matching.
+- **Call edges** come from Tree-sitter `method_invocation` / `call_expression` nodes; unresolved names are linked across files by simple callee name when unique.
 - **Re-running `source add` with the same alias fails** — edit `.s4/sources.json` or use a new alias.
-- **`make sources` is not idempotent** — register once, then use `graph` / `map` / `diff`.
+- **`make sources` is not idempotent** — register once, then use `graph` / `map` / `show` / `diff`.
 
 ## Troubleshooting
 
@@ -288,7 +328,9 @@ Key crates:
 | `graph manifest ... not found` | Graph not built | Run `s4 graph build --source <alias>` |
 | `git clone failed` | Network / URL / ref | Check `--git`, `--git-ref`; try manual clone into `.s4/cache/<alias>` |
 | `local source path does not exist` | Wrong `--local` path | Use absolute or correct relative path |
-| Empty diff / 0% coverage | Graphs not built or wrong aliases | Verify with `source list` and `map list` |
+| Empty diff / 0% coverage | Nothing confirmed as Ported | `s4 map show` then `s4 map confirm --name …` |
+| `cannot confirm extra-in-target` | Rust-only symbol | Leave it extra, or add the Java counterpart |
+| `ambiguous --name` | Two rows share that identifier | Use `--id` from `map show` |
 | Slow first run | Git shallow/sparse clone + parse | Subsequent runs reuse `.s4/cache/` |
 
 ## Next Steps

@@ -14,9 +14,9 @@ Defines parse units, USIR module contracts, and parse pipeline traits. Java and 
 | `unit` | `ParseUnit` |
 | `usir` | `UsirModule`, entity/relation kinds |
 | `pipeline` | `ParsePipeline`, `ParseContext` |
-| `plugins` | `JavaParser`, `RustParser`, `parse_all_parallel` |
+| `plugins` | `JavaParser`, `RustParser`, `extract_for_language`, `parse_all_parallel` |
 
-Used by `s4 graph`. v1 extraction is heuristic (intra-file `name(` call detection, no full type system). Overloads of the same name are kept; cross-module unresolved calls link only when the callee name is unique.
+Used by `s4 graph`. v1 extraction is heuristic (Tree-sitter `method_invocation` / `call_expression` names, no full type system). Overloads of the same name are kept; cross-module unresolved calls link only when the callee name is unique.
 
 `parse_all_parallel` extracts with bounded threads then persists sequentially. When `ParseUnit::source_hash` is set, USIR artifacts are reused from CAS via a `usir_cache` index record. `s4 graph build` also skips the whole parse when the physical snapshot hash is unchanged.
 

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Enforce S4MP crate dependency tiers (outer may depend on inner only).
+# Reads only the [dependencies] table of each Cargo.toml (not comments, not
+# [dev-dependencies]). Parked crates are skipped.
 # Tier map: docs/engineering/ENGINEERING_STANDARDS.md §3.3
 set -euo pipefail
 
@@ -18,6 +20,21 @@ tier_of() {
   esac
 }
 
+extract_deps() {
+  awk '
+    /^\[dependencies\]/ {d=1; next}
+    /^\[/ {d=0}
+    d && $0 ~ /^[[:space:]]*#/ {next}
+    d {
+      line = $0
+      while (match(line, /s4-[a-z0-9-]+/)) {
+        print substr(line, RSTART, RLENGTH)
+        line = substr(line, RSTART + RLENGTH)
+      }
+    }
+  ' "$1"
+}
+
 errors=0
 for crate_dir in crates/s4-*; do
   crate="$(basename "$crate_dir")"
@@ -32,10 +49,15 @@ for crate_dir in crates/s4-*; do
     errors=$((errors + 1))
     continue
   fi
-  deps="$(grep -oE 's4-[a-z0-9-]+' "$cargo_toml" | sort -u | grep -v "^${crate}$" || true)"
+  deps="$(extract_deps "$cargo_toml" | sort -u | grep -v "^${crate}$" || true)"
   for dep in $deps; do
     dep_tier="$(tier_of "$dep")"
     [ -n "$dep_tier" ] || continue
+    if [ "$dep_tier" = "parked" ]; then
+      echo "error: $crate depends on parked crate $dep" >&2
+      errors=$((errors + 1))
+      continue
+    fi
     if [ "$dep_tier" -gt "$my_tier" ]; then
       echo "error: $crate (tier $my_tier) depends on $dep (tier $dep_tier) — upward dependency" >&2
       errors=$((errors + 1))

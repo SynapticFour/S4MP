@@ -1,41 +1,44 @@
 # Contributing to S4MP
 
-Thank you for contributing. All work must follow the platform engineering standards.
+This repository is maintained by **one person**. Pull requests are welcome; they are not the current default workflow. Until branch protection is enabled, commits may land directly on `main`. CI on `main` is the gate that matters.
 
 ## Before You Code
 
-1. Read [Engineering Standards](docs/engineering/ENGINEERING_STANDARDS.md) — **mandatory** for every PR.
-2. Read [Architecture Specification](docs/architecture/ARCHITECTURE.md) for system context.
-3. For the Java→Rust porting pipeline, see [Porting Workflow Guide](docs/guides/PORTING_WORKFLOW.md).
-4. For architectural choices, open an [ADR](docs/adr/README.md) or [RFC](docs/rfc/README.md) before large implementations.
+1. Read [Engineering Standards](docs/engineering/ENGINEERING_STANDARDS.md).
+2. Read the README maturity banner — do not add commands that claim certification or semantic equivalence.
+3. For the Java→Rust pipeline, see [Porting Workflow](docs/guides/PORTING_WORKFLOW.md).
+4. New architectural choices: add an [ADR](docs/adr/README.md) in the same change.
 
 ## Development Setup
 
 ```bash
 rustup toolchain install stable --component rustfmt clippy
+make install-hooks
 cargo build --workspace
-cargo test --workspace
+cargo test --locked --workspace
 ```
 
-## Pre-PR Checklist
+## Pre-PR / pre-push Checklist
+
+`make install-hooks` runs `scripts/hooks/ci-check.sh`, which mirrors CI:
 
 ```bash
-cargo fmt --all
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
-cargo doc --workspace --no-deps
+cargo fmt --all -- --check
+cargo clippy --locked --workspace --all-targets -- -D warnings
+cargo test --locked --workspace
+RUSTDOCFLAGS="-D warnings" cargo doc --locked --workspace --no-deps
+bash scripts/check-tiers.sh
+cargo deny check   # if cargo-deny is installed
 ```
-
-Install [cargo-deny](https://github.com/EmbarkStudios/cargo-deny) and run `cargo deny check` if you changed dependencies.
-
-See [Engineering Standards §21](docs/engineering/ENGINEERING_STANDARDS.md#21-pre-implementation-checklist) for the full list.
 
 ## Pull Requests
 
-- Branch from `main`: `feature/<issue>-<short-description>`
-- Link an issue or ADR/RFC
-- One logical change per PR when practical
-- Documentation and tests with behavior changes
+When you open a PR:
+
+- Branch from `main`: `feature/<short-description>`
+- One logical change
+- Tests for behavior changes
+- Do not describe parked crates (`s4-api`, `s4-ui`, `s4-planner`) as shipped
 
 ## License
 

@@ -8,8 +8,9 @@ use tree_sitter::Node;
 
 /// Tree-sitter frontend for Java sources (heuristic USIR extraction).
 ///
-/// Call and reference edges use simple name matching. Cross-file callees are recorded as
-/// unresolved calls for the graph linker. Signatures are captured when present on the AST.
+/// Call edges come from `method_invocation` AST nodes. Cross-file callees are
+/// recorded as unresolved calls for graph lowering. Signatures are captured when
+/// present on the AST.
 #[derive(Clone, Debug, Default)]
 pub struct JavaParser;
 
@@ -57,23 +58,21 @@ fn walk_java_node(
         "method_declaration" => {
             let name = child_by_field(&node, "name", source).unwrap_or("<anonymous>");
             let signature = java_method_signature(name, node, source);
-            let id = builder.add_callable(name, Some(signature));
+            let qualified = enclosing_type.map(|ty| format!("{ty}.{name}"));
+            let id = builder.add_callable(name, qualified.as_deref(), Some(signature));
             add_type_references(id, node, source, builder);
             if let Some(body) = node.child_by_field_name("body") {
-                if let Ok(body_text) = body.utf8_text(source.as_bytes()) {
-                    builder.defer_calls(id, body_text.to_string());
-                }
+                builder.defer_calls(id, super::collect_java_callee_names(body, source));
             }
         },
         "constructor_declaration" => {
             let name = enclosing_type.unwrap_or("constructor");
             let signature = java_method_signature(name, node, source);
-            let id = builder.add_callable(name, Some(signature));
+            let qualified = enclosing_type.map(|ty| format!("{ty}.<init>"));
+            let id = builder.add_callable(name, qualified.as_deref(), Some(signature));
             add_type_references(id, node, source, builder);
             if let Some(body) = node.child_by_field_name("body") {
-                if let Ok(body_text) = body.utf8_text(source.as_bytes()) {
-                    builder.defer_calls(id, body_text.to_string());
-                }
+                builder.defer_calls(id, super::collect_java_callee_names(body, source));
             }
         },
         "field_declaration" | "constant_declaration" => {
@@ -208,6 +207,7 @@ class Example {
         let sig = add.signature.as_deref().expect("signature");
         assert!(sig.contains("add"), "{sig}");
         assert!(sig.contains("int"), "{sig}");
+        assert_eq!(add.qualified.as_deref(), Some("Example.add"));
     }
 
     #[test]

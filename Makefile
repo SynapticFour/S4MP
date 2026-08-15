@@ -1,6 +1,14 @@
-# Java→Rust porting pipeline (HaplotypeCaller defaults).
+# Java→Rust porting pipeline.
+# Intended loop: init → source → graph → map suggest → map show → map confirm → diff → verify → certify
 # Beginner guide: docs/guides/PORTING_WORKFLOW.md
-# Override: make sources RUST_LOCAL=../my-port
+#
+# Fixture (no network, recommended smoke test):
+#   make e2e-fixture
+#
+# Live GATK HaplotypeCaller slice (optional):
+#   make sources RUST_LOCAL=../my-hc-port
+#   make diff
+#   make show
 
 JAVA_ALIAS ?= gatk-java-hc
 JAVA_GIT   ?= https://github.com/broadinstitute/gatk.git
@@ -9,14 +17,14 @@ RUST_ALIAS ?= hc-rust
 RUST_LOCAL ?= ../my-hc-port
 GRAPH_FILTER ?= callable,calls,type,defines
 
-.PHONY: sources graph-java graph-rust graph map diff \
+.PHONY: sources graph-java graph-rust graph map show diff \
         graph-export graph-export-java graph-export-rust graph-export-svg \
         open-report install-hooks clean-cache e2e-fixture
 
 install-hooks:
 	@bash scripts/install-hooks.sh
 
-## Fixture e2e (no network): mini Java/Rust trees → diff report.
+## Fixture e2e (no network): mini Java/Rust trees → review → confirm → certify.
 e2e-fixture:
 	cargo test -p s4-cli --test e2e_mini_port -- --nocapture
 
@@ -47,9 +55,13 @@ graph-export-svg: graph-export-rust
 map: graph
 	cargo run -p s4-cli -- map suggest --java $(JAVA_ALIAS) --rust $(RUST_ALIAS)
 
+show: map
+	cargo run -p s4-cli -- map show --java $(JAVA_ALIAS) --rust $(RUST_ALIAS)
+
 diff: map
 	cargo run -p s4-cli -- diff --java $(JAVA_ALIAS) --rust $(RUST_ALIAS)
 	@echo "Report: .s4/reports/diff-report.md"
+	@echo "Review rows: make show   then   s4 map confirm --name <symbol> --java $(JAVA_ALIAS) --rust $(RUST_ALIAS)"
 
 open-report:
 	@echo .s4/reports/diff-report.md

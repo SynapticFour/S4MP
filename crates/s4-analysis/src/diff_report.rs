@@ -151,6 +151,19 @@ pub fn render_markdown(report: &DiffReport) -> String {
         "`s4 verify` / `s4 certify` evaluate coverage/policy thresholds only — not semantic equivalence.\n\n",
     );
 
+    out.push_str("## How to review\n\n");
+    out.push_str("Heuristic pairs are **Diverged**, never auto-Ported. Confirm a pair, then re-run `s4 diff` / `s4 verify` / `s4 certify`.\n\n");
+    out.push_str("```bash\n");
+    let _ = writeln!(
+        out,
+        "s4 map show --java {} --rust {}",
+        report.java_source, report.rust_source
+    );
+    out.push_str("s4 map confirm --id <id>          # unique prefix of id= is enough\n");
+    out.push_str("s4 map confirm --name add         # error if the name is ambiguous\n");
+    out.push_str("```\n\n");
+    out.push_str("Default `s4 certify` requires **at least one Ported** row.\n\n");
+
     out.push_str("## Summary\n\n");
     out.push_str("| Metric | Value |\n");
     out.push_str("|--------|------:|\n");
@@ -182,52 +195,87 @@ pub fn render_markdown(report: &DiffReport) -> String {
     let _ = writeln!(out, "| medium (0.65–0.85) | {} |", bands.medium);
     let _ = writeln!(out, "| low (< 0.65) | {} |\n", bands.low);
 
-    out.push_str("## Fehlt im Rust-Port\n\n");
-    if report.missing_in_target.is_empty() {
-        out.push_str("_None._\n\n");
-    } else {
-        for entry in &report.missing_in_target {
-            let _ = writeln!(out, "- {}", entry_line_name(entry));
-        }
-        out.push('\n');
-    }
+    write_entry_section(
+        &mut out,
+        "Missing in Rust",
+        &report.missing_in_target,
+        EntryLineKind::Missing,
+    );
+    write_entry_section(
+        &mut out,
+        "Diverged (review these)",
+        &report.diverged,
+        EntryLineKind::Paired,
+    );
+    write_entry_section(
+        &mut out,
+        "Extra in Rust (no Java counterpart)",
+        &report.extra_in_target,
+        EntryLineKind::Extra,
+    );
+    write_entry_section(
+        &mut out,
+        "Ported (manually confirmed)",
+        &report.ported,
+        EntryLineKind::Paired,
+    );
 
-    out.push_str("## Vermutlich abweichend (zur Prüfung)\n\n");
-    if report.diverged.is_empty() {
-        out.push_str("_None._\n\n");
-    } else {
-        for entry in &report.diverged {
-            let _ = writeln!(
-                out,
-                "- {} (confidence: {:.2})",
-                entry_line_name(entry),
-                entry.confidence
-            );
-        }
-        out.push('\n');
-    }
-
-    out.push_str("## Zusätzlich im Rust-Port (kein Java-Pendant)\n\n");
-    if report.extra_in_target.is_empty() {
-        out.push_str("_None._\n\n");
-    } else {
-        for entry in &report.extra_in_target {
-            let _ = writeln!(out, "- {}", entry_line_name(entry));
-        }
-        out.push('\n');
-    }
-
-    out.push_str("## Bestätigt portiert\n\n");
-    if report.ported.is_empty() {
-        out.push_str("_None._\n\n");
-    } else {
-        for entry in &report.ported {
-            let _ = writeln!(out, "- {}", entry_line_name(entry));
-        }
-        out.push('\n');
+    if !report.unmapped.is_empty() {
+        write_entry_section(
+            &mut out,
+            "Unmapped",
+            &report.unmapped,
+            EntryLineKind::Missing,
+        );
     }
 
     out
+}
+
+#[derive(Clone, Copy)]
+enum EntryLineKind {
+    Paired,
+    Missing,
+    Extra,
+}
+
+fn write_entry_section(
+    out: &mut String,
+    heading: &str,
+    entries: &[CorrespondenceEntry],
+    kind: EntryLineKind,
+) {
+    let _ = writeln!(out, "## {heading}\n");
+    if entries.is_empty() {
+        out.push_str("_None._\n\n");
+        return;
+    }
+    for entry in entries {
+        let _ = writeln!(out, "- {}", format_entry_line(entry, kind));
+    }
+    out.push('\n');
+}
+
+fn format_entry_line(entry: &CorrespondenceEntry, kind: EntryLineKind) -> String {
+    let name = entry_line_name(entry);
+    let id = crate::correspondence::short_entry_id(&entry.id);
+    let mut line = match kind {
+        EntryLineKind::Paired => {
+            let mut s = format!("**{name}** `id={id}`");
+            if !matches!(entry.status, CorrespondenceStatus::Ported) {
+                let _ = write!(s, " (confidence: {:.2})", entry.confidence);
+            }
+            s
+        },
+        EntryLineKind::Missing | EntryLineKind::Extra => format!("**{name}** `id={id}`"),
+    };
+    if let Some(sig) = entry.source_signature.as_deref().filter(|s| !s.is_empty()) {
+        let _ = write!(line, "  \n  Java `{sig}`");
+    }
+    if let Some(sig) = entry.target_signature.as_deref().filter(|s| !s.is_empty()) {
+        let _ = write!(line, "  \n  Rust `{sig}`");
+    }
+    line
 }
 
 /// Render a machine-readable JSON sidecar for Showcase / CI evidence packs.
@@ -352,12 +400,14 @@ mod tests {
                     kind: NodeKind::Callable,
                     label: "alpha".to_string(),
                     signature: None,
+                    qualified: None,
                 },
                 Node {
                     id: NodeId(1),
                     kind: NodeKind::Callable,
                     label: "beta".to_string(),
                     signature: None,
+                    qualified: None,
                 },
             ],
             vec![],
@@ -380,6 +430,8 @@ mod tests {
                 method: CorrespondenceMethod::Manual,
                 note: None,
                 display_name: Some("alpha".into()),
+                source_signature: None,
+                target_signature: None,
                 stale: false,
             },
             CorrespondenceEntry {
@@ -394,6 +446,8 @@ mod tests {
                 method: CorrespondenceMethod::NameHeuristic,
                 note: None,
                 display_name: Some("beta".into()),
+                source_signature: None,
+                target_signature: None,
                 stale: false,
             },
         ];
@@ -408,7 +462,11 @@ mod tests {
         let md = render_markdown(&report);
         assert!(md.contains("# Diff: java -> rust"));
         assert!(md.contains("heuristic-map-v2"));
-        assert!(md.contains("## Fehlt im Rust-Port"));
+        assert!(md.contains("## Missing in Rust"));
+        assert!(md.contains("## Diverged (review these)"));
+        assert!(md.contains("s4 map confirm --id"));
+        assert!(md.contains("`id=1`"));
+        assert!(md.contains("`id=2`"));
         assert!(md.contains("Confidence bands"));
         assert!(md.contains("alpha"));
         assert!(!md.contains("manually confirmed") || md.contains("alpha"));
@@ -423,12 +481,14 @@ mod tests {
                     kind: NodeKind::Callable,
                     label: "alpha".to_string(),
                     signature: None,
+                    qualified: None,
                 },
                 Node {
                     id: NodeId(1),
                     kind: NodeKind::Type,
                     label: "Calc".to_string(),
                     signature: None,
+                    qualified: None,
                 },
             ],
             vec![],
@@ -446,6 +506,8 @@ mod tests {
                 method: CorrespondenceMethod::Manual,
                 note: None,
                 display_name: Some("alpha".into()),
+                source_signature: None,
+                target_signature: None,
                 stale: false,
             },
             CorrespondenceEntry {
@@ -460,6 +522,8 @@ mod tests {
                 method: CorrespondenceMethod::Manual,
                 note: None,
                 display_name: Some("Calc".into()),
+                source_signature: None,
+                target_signature: None,
                 stale: false,
             },
         ];

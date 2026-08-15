@@ -6,7 +6,7 @@ Certification, compliance policy, and audit trail contracts.
 
 | Module | Purpose |
 |--------|---------|
-| `evaluate` | **Live:** `evaluate_policy`, `certificate_from_evaluation` over `VerificationRun` |
+| `evaluate` | **Live:** default policy requires `verification_passed` **and** `min_ported:1` |
 | `certificate` | `Certificate`, `CertificateStatus` |
 | `policy` | `CertificationPolicy`, `PolicyRule` |
 | `issuer` | `CertificateIssuer` trait (contract; unused by CLI) |

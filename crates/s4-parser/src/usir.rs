@@ -36,11 +36,14 @@ pub struct UsirEntity {
     pub id: UsirLocalId,
     /// Entity classification.
     pub kind: UsirEntityKind,
-    /// Qualified or local name.
+    /// Simple identifier used for heuristic name matching.
     pub name: String,
     /// Optional signature string (callables/types); additive in schema 0.1.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub signature: Option<String>,
+    /// Qualified display name (`Type.method` / `Type::method`) when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub qualified: Option<String>,
 }
 
 /// Standard USIR entity kinds.

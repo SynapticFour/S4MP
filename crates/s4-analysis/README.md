@@ -20,9 +20,10 @@ Architecture extraction, feature extraction, and cross-graph analysis.
 | Function | CLI step |
 |----------|----------|
 | `usir_to_graph` | `s4 graph` |
-| `suggest_correspondences` | `s4 map suggest` |
+| `suggest_correspondences` | `s4 map suggest` (pairs stored as `Java ↔ Rust` with signatures) |
 | `merge_correspondences` | Preserves manual rows on re-suggest |
-| `build_diff_report` + `render_markdown` | `s4 diff` |
+| `short_entry_id` / `entries_matching_id` / `entries_matching_name` | `s4 map show` / `confirm` / `reject` |
+| `build_diff_report` + `render_markdown` | `s4 diff` (English, `id=` on every row) |
 
 See [Porting Workflow Guide](../../docs/guides/PORTING_WORKFLOW.md) for end-to-end usage.
 

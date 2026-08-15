@@ -6,7 +6,8 @@ use s4_graph::memory::InMemoryGraphView;
 use s4_graph::{Edge, GraphView, Node, NodeKind};
 use s4_parser::{LanguageId, ParseUnit};
 use s4_project::{
-    should_skip_snapshot_path, validate_git_subpath, validate_source_alias, SourceOrigin, SourceRef,
+    should_skip_snapshot_path, validate_git_ref, validate_git_subpath, validate_git_url,
+    validate_source_alias, SourceOrigin, SourceRef,
 };
 use s4_storage::{Artifact, ArtifactKind, FileSystemStore, StoreReader, StoreWriter};
 use serde::{Deserialize, Serialize};
@@ -389,10 +390,16 @@ pub fn source_ref_from_flags(
         validate_git_subpath(sub)?;
     }
     let origin = match (git, local) {
-        (Some(url), None) => SourceOrigin::Git {
-            url: url.to_string(),
-            git_ref: git_ref.map(str::to_string),
-            subpath: subpath.map(str::to_string),
+        (Some(url), None) => {
+            validate_git_url(url)?;
+            if let Some(reference) = git_ref {
+                validate_git_ref(reference)?;
+            }
+            SourceOrigin::Git {
+                url: url.to_string(),
+                git_ref: git_ref.map(str::to_string),
+                subpath: subpath.map(str::to_string),
+            }
         },
         (None, Some(path)) => SourceOrigin::Local {
             path: PathBuf::from(path),

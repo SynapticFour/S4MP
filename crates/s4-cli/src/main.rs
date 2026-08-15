@@ -16,14 +16,15 @@ use s4_core::Result;
 #[command(
     name = "s4",
     version,
-    about = "SynapticFour Method Platform — heuristic Java↔Rust port maps (not certification)",
+    about = "Heuristic Java↔Rust port maps (review → confirm → coverage)",
     long_about = "SynapticFour Method Platform (S4MP).\n\n\
-Shipped today: init, source, graph, map, diff, analyze, query, require, knowledge, verify, certify, \
-plugin, reason.\n\
+Claimed use: compare a Java tree with a Rust port, review heuristic pairs, confirm them, \
+then measure coverage. Shipped loop:\n\
+  init → source add → graph build → map suggest → map show → map confirm → diff → verify → certify\n\n\
+Satellite (not the port product): query, require, knowledge, plugin, reason.\n\n\
 Honesty: certify evaluates verification-run policy only — not semantic equivalence. \
-`s4 reason` outputs are always Proposed.\n\n\
-Maturity: heuristic-map-v2. Name (+ optional signature) similarity maps only — not semantic \
-equivalence, not a certificate."
+Default policy requires ≥1 manually confirmed Ported row.\n\n\
+Maturity: heuristic-map-v2. Name (+ optional signature) similarity maps only."
 )]
 struct Cli {
     #[command(subcommand)]
@@ -125,22 +126,26 @@ enum Commands {
         #[arg(long, default_value = ".s4/reports/diff-report.md")]
         out: String,
     },
-    /// Requirements CRUD, `OpenAPI` import, and traces.
+    /// Requirements CRUD, `OpenAPI` import, and traces (satellite).
+    #[command(hide = true)]
     Require {
         #[command(subcommand)]
         action: RequireAction,
     },
-    /// Software knowledge graph helpers.
+    /// Software knowledge graph helpers (satellite).
+    #[command(hide = true)]
     Knowledge {
         #[command(subcommand)]
         action: KnowledgeAction,
     },
     /// List in-process plugins (Phase 6; WASM deferred).
+    #[command(hide = true)]
     Plugin {
         #[command(subcommand)]
         action: PluginAction,
     },
     /// Offline heuristic reasoning (outputs always Proposed).
+    #[command(hide = true)]
     Reason {
         /// Intent: `explain` | `refactor` | `map` | `architecture`.
         #[arg(long, default_value = "explain")]
@@ -281,17 +286,47 @@ enum MapAction {
         #[arg(long)]
         rust: String,
     },
-    /// Confirm a correspondence as ported.
-    Confirm {
-        /// Correspondence entry id.
+    /// List correspondence rows (short id, pairing, signatures).
+    Show {
+        /// Java source alias (pass with `--rust` to select one map).
         #[arg(long)]
-        id: String,
+        java: Option<String>,
+        /// Rust source alias.
+        #[arg(long)]
+        rust: Option<String>,
+        /// Filter: `ported` | `diverged` | `missing` | `extra` | `unmapped`.
+        #[arg(long)]
+        status: Option<String>,
     },
-    /// Reject a suggested correspondence.
-    Reject {
-        /// Correspondence entry id.
+    /// Confirm a correspondence as ported (`--id` or `--name`).
+    Confirm {
+        /// Correspondence id or unique prefix.
         #[arg(long)]
-        id: String,
+        id: Option<String>,
+        /// Simple or qualified name (`add`, `Calculator.add`).
+        #[arg(long)]
+        name: Option<String>,
+        /// Scope to this Java source alias.
+        #[arg(long)]
+        java: Option<String>,
+        /// Scope to this Rust source alias.
+        #[arg(long)]
+        rust: Option<String>,
+    },
+    /// Reject a suggested correspondence (`--id` or `--name`).
+    Reject {
+        /// Correspondence id or unique prefix.
+        #[arg(long)]
+        id: Option<String>,
+        /// Simple or qualified name (`add`, `Calculator.add`).
+        #[arg(long)]
+        name: Option<String>,
+        /// Scope to this Java source alias.
+        #[arg(long)]
+        java: Option<String>,
+        /// Scope to this Rust source alias.
+        #[arg(long)]
+        rust: Option<String>,
     },
     /// List correspondence maps.
     List,
@@ -368,12 +403,7 @@ fn run(cli: Cli) -> Result<()> {
             } => graph::run_export(&source, &format, &filter, &out),
             GraphAction::Diff { left, right } => graph::run_diff(&left, &right),
         },
-        Commands::Map { action } => match action {
-            MapAction::Suggest { java, rust } => map::run_suggest(&java, &rust),
-            MapAction::Confirm { id } => map::run_confirm(&id),
-            MapAction::Reject { id } => map::run_reject(&id),
-            MapAction::List => map::run_list(),
-        },
+        Commands::Map { action } => run_map(action),
         Commands::Diff { java, rust, out } => diff::run(&java, &rust, &out),
         Commands::Require { action } => match action {
             RequireAction::Add { statement, kind } => require::run_add(&kind, &statement),
@@ -394,5 +424,37 @@ fn run(cli: Cli) -> Result<()> {
             prompt,
             out,
         } => reason::run(&intent, prompt.as_deref(), &out),
+    }
+}
+
+fn run_map(action: MapAction) -> Result<()> {
+    match action {
+        MapAction::Suggest { java, rust } => map::run_suggest(&java, &rust),
+        MapAction::Show { java, rust, status } => {
+            map::run_show(java.as_deref(), rust.as_deref(), status.as_deref())
+        },
+        MapAction::Confirm {
+            id,
+            name,
+            java,
+            rust,
+        } => map::run_confirm(
+            id.as_deref(),
+            name.as_deref(),
+            java.as_deref(),
+            rust.as_deref(),
+        ),
+        MapAction::Reject {
+            id,
+            name,
+            java,
+            rust,
+        } => map::run_reject(
+            id.as_deref(),
+            name.as_deref(),
+            java.as_deref(),
+            rust.as_deref(),
+        ),
+        MapAction::List => map::run_list(),
     }
 }

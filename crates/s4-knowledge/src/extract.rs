@@ -84,12 +84,14 @@ mod tests {
                     kind: NodeKind::Type,
                     label: "Calculator".into(),
                     signature: None,
+                    qualified: None,
                 },
                 Node {
                     id: NodeId(1),
                     kind: NodeKind::Callable,
                     label: "add".into(),
                     signature: None,
+                    qualified: None,
                 },
             ],
             vec![],
@@ -111,6 +113,7 @@ mod tests {
                 kind: NodeKind::Type,
                 label: "Widget".into(),
                 signature: None,
+                qualified: None,
             }],
             vec![],
         );

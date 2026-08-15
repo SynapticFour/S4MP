@@ -25,7 +25,7 @@ pub struct UsirModuleBuilder {
     relations: Vec<UsirRelation>,
     callable_ids: HashMap<String, Vec<UsirLocalId>>,
     type_ids: HashMap<String, UsirLocalId>,
-    deferred_calls: Vec<(UsirLocalId, String)>,
+    deferred_calls: Vec<(UsirLocalId, Vec<String>)>,
 }
 
 impl UsirModuleBuilder {
@@ -41,6 +41,7 @@ impl UsirModuleBuilder {
             kind: UsirEntityKind::Module,
             name: module_name.clone(),
             signature: None,
+            qualified: None,
         }];
         Ok(Self {
             module_name,
@@ -55,12 +56,25 @@ impl UsirModuleBuilder {
 
     /// Add a type entity (class, interface, enum, struct, trait, …).
     pub fn add_type(&mut self, name: &str) -> UsirLocalId {
-        self.add_entity(name, UsirEntityKind::Type, None)
+        self.add_entity(name, UsirEntityKind::Type, None, None)
     }
 
     /// Add a callable entity (method, function, constructor, …).
-    pub fn add_callable(&mut self, name: &str, signature: Option<String>) -> UsirLocalId {
-        let id = self.add_entity(name, UsirEntityKind::Callable, signature);
+    ///
+    /// `name` is the simple identifier used for heuristic matching. `qualified` is
+    /// the report label (`Calculator.add`, `Calculator::add`) when known.
+    pub fn add_callable(
+        &mut self,
+        name: &str,
+        qualified: Option<&str>,
+        signature: Option<String>,
+    ) -> UsirLocalId {
+        let id = self.add_entity(
+            name,
+            UsirEntityKind::Callable,
+            signature,
+            qualified.map(str::to_string),
+        );
         self.callable_ids
             .entry(name.to_string())
             .or_default()
@@ -70,7 +84,7 @@ impl UsirModuleBuilder {
 
     /// Add a symbol entity (field, const, static, …).
     pub fn add_symbol(&mut self, name: &str) -> UsirLocalId {
-        self.add_entity(name, UsirEntityKind::Symbol, None)
+        self.add_entity(name, UsirEntityKind::Symbol, None, None)
     }
 
     fn add_entity(
@@ -78,6 +92,7 @@ impl UsirModuleBuilder {
         name: &str,
         kind: UsirEntityKind,
         signature: Option<String>,
+        qualified: Option<String>,
     ) -> UsirLocalId {
         let id = UsirLocalId(self.next_id);
         self.next_id += 1;
@@ -89,6 +104,7 @@ impl UsirModuleBuilder {
             kind,
             name: name.to_string(),
             signature,
+            qualified,
         });
         self.relations.push(UsirRelation {
             from: UsirLocalId(0),
@@ -109,37 +125,36 @@ impl UsirModuleBuilder {
         }
     }
 
-    /// Defer heuristic call detection for `caller_id` until [`Self::build`].
+    /// Defer call resolution for `caller_id` until [`Self::build`].
     ///
-    /// Bodies are resolved against the full `callable_ids` map after all callables
-    /// in the module have been registered. Unresolved names become
+    /// Callee names come from Tree-sitter `method_invocation` / `call_expression`
+    /// nodes (not a text scan of the body). Names with no local callable become
     /// [`UsirModule::unresolved_calls`] for cross-module linking.
-    pub fn defer_calls(&mut self, caller_id: UsirLocalId, body: String) {
-        self.deferred_calls.push((caller_id, body));
+    pub fn defer_calls(&mut self, caller_id: UsirLocalId, callee_names: Vec<String>) {
+        self.deferred_calls.push((caller_id, callee_names));
     }
 
     fn resolve_deferred_calls(&mut self) -> Vec<UnresolvedCall> {
         let deferred = std::mem::take(&mut self.deferred_calls);
         let mut unresolved = Vec::new();
-        for (caller_id, body) in deferred {
-            unresolved.extend(self.add_heuristic_calls(caller_id, &body));
+        for (caller_id, names) in deferred {
+            unresolved.extend(self.add_heuristic_calls(caller_id, names));
         }
         unresolved
     }
 
-    /// Heuristic call detection: `name(` identifiers in `body` map to local callables.
+    /// Map callee names to local callables; unknown names become unresolved calls.
     ///
-    /// Overloads of the same name all receive a `Calls` edge. Names with no local
-    /// callable become [`UnresolvedCall`] for cross-module linking.
+    /// Overloads of the same name all receive a `Calls` edge.
     pub fn add_heuristic_calls(
         &mut self,
         caller_id: UsirLocalId,
-        body: &str,
+        names: Vec<String>,
     ) -> Vec<UnresolvedCall> {
         let mut unresolved = Vec::new();
         let mut seen_unresolved = HashSet::new();
 
-        for name in extract_call_names(body) {
+        for name in names {
             if let Some(ids) = self.callable_ids.get(&name) {
                 for &callee_id in ids {
                     if callee_id == caller_id {
@@ -317,54 +332,129 @@ fn module_name_from_path(path: &str, source_root: &Path) -> Result<String> {
         .join("/"))
 }
 
-#[cfg(test)]
-fn contains_call(body: &str, callee: &str) -> bool {
-    extract_call_names(body).iter().any(|n| n == callee)
+fn walk_skip_opaque(kind: &str) -> bool {
+    matches!(
+        kind,
+        "line_comment"
+            | "block_comment"
+            | "string_literal"
+            | "raw_string_literal"
+            | "character_literal"
+            | "char_literal"
+            | "text_block"
+    )
 }
 
-/// Extract simple `name(` call identifiers from a body (heuristic).
-fn extract_call_names(body: &str) -> Vec<String> {
+/// Collect callee identifiers from a Tree-sitter subtree (Java `method_invocation`).
+pub(super) fn collect_java_callee_names(body: tree_sitter::Node<'_>, source: &str) -> Vec<String> {
     let mut names = Vec::new();
-    let bytes = body.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i].is_ascii_alphabetic() || bytes[i] == b'_' {
-            let start = i;
-            i += 1;
-            while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
-                i += 1;
-            }
-            if i < bytes.len() && bytes[i] == b'(' {
-                let name = &body[start..i];
-                if !is_keyword(name) {
-                    names.push(name.to_string());
-                }
-            }
-        } else {
-            i += 1;
-        }
-    }
+    walk_java_callees(body, source, &mut names);
     dedupe_preserve_order(names)
 }
 
-fn is_keyword(name: &str) -> bool {
-    matches!(
-        name,
-        "if" | "for"
-            | "while"
-            | "switch"
-            | "catch"
-            | "return"
-            | "new"
-            | "typeof"
-            | "sizeof"
-            | "match"
-            | "loop"
-            | "async"
-            | "await"
-            | "super"
-            | "this"
-    )
+fn walk_java_callees(node: tree_sitter::Node<'_>, source: &str, names: &mut Vec<String>) {
+    if walk_skip_opaque(node.kind()) {
+        return;
+    }
+    if node.kind() == "method_invocation" {
+        if let Some(name) = child_by_field(&node, "name", source) {
+            names.push(name.to_string());
+        }
+    }
+    let mut cursor = node.walk();
+    if cursor.goto_first_child() {
+        loop {
+            walk_java_callees(cursor.node(), source, names);
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
+    }
+}
+
+/// Collect callee identifiers from a Tree-sitter subtree (Rust `call_expression`).
+pub(super) fn collect_rust_callee_names(body: tree_sitter::Node<'_>, source: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    walk_rust_callees(body, source, &mut names);
+    dedupe_preserve_order(names)
+}
+
+fn walk_rust_callees(node: tree_sitter::Node<'_>, source: &str, names: &mut Vec<String>) {
+    if walk_skip_opaque(node.kind()) {
+        return;
+    }
+    if node.kind() == "call_expression" {
+        if let Some(func) = node.child_by_field_name("function") {
+            if let Some(name) = rust_callee_name(func, source) {
+                names.push(name);
+            }
+        }
+    }
+    let mut cursor = node.walk();
+    if cursor.goto_first_child() {
+        loop {
+            walk_rust_callees(cursor.node(), source, names);
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
+    }
+}
+
+fn rust_callee_name(func: tree_sitter::Node<'_>, source: &str) -> Option<String> {
+    match func.kind() {
+        "identifier" => func.utf8_text(source.as_bytes()).ok().map(str::to_string),
+        "field_expression" => child_by_field(&func, "field", source).map(str::to_string),
+        "generic_function" => func
+            .child_by_field_name("function")
+            .and_then(|inner| rust_callee_name(inner, source)),
+        "scoped_identifier" => {
+            let mut last = None;
+            let mut cursor = func.walk();
+            if cursor.goto_first_child() {
+                loop {
+                    let child = cursor.node();
+                    if child.kind() == "identifier" {
+                        last = child.utf8_text(source.as_bytes()).ok().map(str::to_string);
+                    }
+                    if !cursor.goto_next_sibling() {
+                        break;
+                    }
+                }
+            }
+            last
+        },
+        _ => None,
+    }
+}
+
+/// Extract a USIR module using the shipped in-process frontend for `language`.
+///
+/// Shipped languages: `java`, `rust`. This is the single dispatch table used by
+/// `s4 graph build` — not a loadable plugin runtime.
+///
+/// # Errors
+///
+/// Returns an error if the language has no frontend or parsing fails.
+pub fn extract_for_language(
+    language: &str,
+    source: &str,
+    path: &str,
+    source_root: &Path,
+) -> Result<UsirModule> {
+    match language {
+        "java" => extract_java_module(source, path, source_root),
+        "rust" => extract_rust_module(source, path, source_root),
+        other => Err(S4Error::InvalidInput(format!(
+            "no in-process frontend for language '{other}' (shipped: java, rust)"
+        ))),
+    }
+}
+
+/// Languages with a shipped in-process Tree-sitter frontend.
+#[must_use]
+pub fn shipped_parser_languages() -> &'static [&'static str] {
+    &["java", "rust"]
 }
 
 fn dedupe_preserve_order(names: Vec<String>) -> Vec<String> {
@@ -564,26 +654,68 @@ mod tests {
     use super::*;
 
     #[test]
-    fn heuristic_call_detects_simple_invocation() {
-        assert!(contains_call("foo(bar);", "foo"));
-        assert!(!contains_call("foo bar;", "foo"));
+    fn ast_calls_ignore_comments_and_strings() {
+        let source = r#"
+class Example {
+    void caller() {
+        callee();
+        // callee();
+        String s = "callee()";
+    }
+    void callee() {}
+}
+"#;
+        let module = extract_java_module(source, "Example.java", Path::new(".")).unwrap();
+        let caller_id = module
+            .entities
+            .iter()
+            .find(|e| e.name == "caller")
+            .map(|e| e.id)
+            .unwrap();
+        let target_id = module
+            .entities
+            .iter()
+            .find(|e| e.name == "callee")
+            .map(|e| e.id)
+            .unwrap();
+        let calls: Vec<_> = module
+            .relations
+            .iter()
+            .filter(|r| r.from == caller_id && r.kind == UsirRelationKind::Calls)
+            .collect();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].to, target_id);
     }
 
     #[test]
-    fn contains_call_rejects_substring_false_positive() {
-        assert!(!contains_call("reget(x);", "get"));
+    fn extract_for_language_rejects_unknown() {
+        let err = extract_for_language("python", "", "x.py", Path::new(".")).unwrap_err();
+        assert!(err.to_string().contains("python"));
     }
 
     #[test]
-    fn contains_call_finds_real_match_among_similar_identifiers() {
-        assert!(contains_call("x = get(1) + reget(2);", "get"));
-    }
-
-    #[test]
-    fn extract_call_names_skips_keywords() {
-        let names = extract_call_names("if (x) { foo(1); }");
-        assert!(names.contains(&"foo".to_string()));
-        assert!(!names.contains(&"if".to_string()));
+    fn substring_identifier_is_not_a_call() {
+        let source = r"
+class Example {
+    void caller() { reget(1); }
+    void get() {}
+}
+";
+        let module = extract_java_module(source, "Example.java", Path::new(".")).unwrap();
+        assert!(module
+            .unresolved_calls
+            .iter()
+            .any(|c| c.callee_name == "reget"));
+        let get_id = module
+            .entities
+            .iter()
+            .find(|e| e.name == "get")
+            .map(|e| e.id)
+            .unwrap();
+        assert!(!module
+            .relations
+            .iter()
+            .any(|r| r.to == get_id && r.kind == UsirRelationKind::Calls));
     }
 
     #[test]

@@ -38,6 +38,7 @@ pub fn usir_to_graph(modules: &[UsirModule]) -> Result<Box<dyn GraphView>> {
                 kind: map_entity_kind(&entity.kind),
                 label: entity.name.clone(),
                 signature: entity.signature.clone(),
+                qualified: entity.qualified.clone(),
             })?;
         }
 
@@ -126,12 +127,14 @@ mod tests {
                         kind: UsirEntityKind::Module,
                         name: "a.java".into(),
                         signature: None,
+                        qualified: None,
                     },
                     UsirEntity {
                         id: UsirLocalId(1),
                         kind: UsirEntityKind::Callable,
                         name: "caller".into(),
                         signature: Some("caller():void".into()),
+                        qualified: None,
                     },
                 ],
                 relations: vec![UsirRelation {
@@ -152,12 +155,14 @@ mod tests {
                         kind: UsirEntityKind::Module,
                         name: "b.java".into(),
                         signature: None,
+                        qualified: None,
                     },
                     UsirEntity {
                         id: UsirLocalId(1),
                         kind: UsirEntityKind::Callable,
                         name: "scale".into(),
                         signature: Some("scale(int):int".into()),
+                        qualified: None,
                     },
                 ],
                 relations: vec![UsirRelation {

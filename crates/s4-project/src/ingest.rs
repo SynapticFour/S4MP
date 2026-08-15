@@ -92,6 +92,10 @@ impl DefaultSourceIngestor {
         subpath: Option<&str>,
     ) -> Result<ResolvedSource> {
         validate_source_alias(alias)?;
+        validate_git_url(url)?;
+        if let Some(reference) = git_ref {
+            validate_git_ref(reference)?;
+        }
         if let Some(sub) = subpath {
             validate_git_subpath(sub)?;
         }
@@ -130,6 +134,7 @@ impl DefaultSourceIngestor {
                     clone_args.push("--branch");
                     clone_args.push(reference);
                 }
+                clone_args.push("--");
                 clone_args.push(url);
                 clone_args.push(dest.as_ref());
                 run_git(&clone_args, self.workspace_root.as_path())?;
@@ -148,6 +153,7 @@ impl DefaultSourceIngestor {
                     args.push("--branch");
                     args.push(reference);
                 }
+                args.push("--");
                 args.push(url);
                 args.push(dest.as_ref());
                 run_git(&args, self.workspace_root.as_path())?;
@@ -169,7 +175,7 @@ impl DefaultSourceIngestor {
         Ok(ResolvedSource {
             alias: alias.to_string(),
             local_root,
-            commit: git_head_commit(&cache_path),
+            commit: Some(git_head_commit(&cache_path)?),
         })
     }
 }
@@ -235,6 +241,7 @@ pub fn snapshot_physical(root: &Path) -> Result<Artifact> {
     }
 
     let mut files = Vec::new();
+    let mut total_bytes = 0_u64;
 
     for entry in walkdir::WalkDir::new(root)
         .follow_links(false)
@@ -246,8 +253,32 @@ pub fn snapshot_physical(root: &Path) -> Result<Artifact> {
         if !entry.file_type().is_file() {
             continue;
         }
+        if files.len() >= MAX_SNAPSHOT_FILES {
+            return Err(S4Error::InvalidInput(format!(
+                "snapshot exceeds {MAX_SNAPSHOT_FILES} files under {}",
+                root.display()
+            )));
+        }
 
         let full_path = entry.path();
+        let meta = std::fs::metadata(full_path).map_err(|e| {
+            S4Error::Storage(format!("failed to stat {}: {e}", full_path.display()))
+        })?;
+        let len = meta.len();
+        if len > MAX_SNAPSHOT_FILE_BYTES {
+            return Err(S4Error::InvalidInput(format!(
+                "snapshot file {} is {len} bytes (limit {MAX_SNAPSHOT_FILE_BYTES})",
+                full_path.display()
+            )));
+        }
+        total_bytes = total_bytes.saturating_add(len);
+        if total_bytes > MAX_SNAPSHOT_TOTAL_BYTES {
+            return Err(S4Error::InvalidInput(format!(
+                "snapshot exceeds {MAX_SNAPSHOT_TOTAL_BYTES} bytes under {}",
+                root.display()
+            )));
+        }
+
         let relative = full_path.strip_prefix(root).map_err(|_| {
             S4Error::Storage(format!("failed to relativize path {}", full_path.display()))
         })?;
@@ -273,6 +304,12 @@ pub fn snapshot_physical(root: &Path) -> Result<Artifact> {
 }
 
 const SKIP_DIR_NAMES: &[&str] = &[".git", "target", "node_modules"];
+/// Hard cap on files hashed into a physical snapshot.
+const MAX_SNAPSHOT_FILES: usize = 50_000;
+/// Hard cap on a single file hashed into a physical snapshot (32 MiB).
+const MAX_SNAPSHOT_FILE_BYTES: u64 = 32 * 1024 * 1024;
+/// Hard cap on total bytes hashed into a physical snapshot (512 MiB).
+const MAX_SNAPSHOT_TOTAL_BYTES: u64 = 512 * 1024 * 1024;
 
 /// Whether `path` should be skipped while snapshotting or discovering sources.
 #[must_use]
@@ -308,6 +345,74 @@ pub fn validate_source_alias(alias: &str) -> Result<()> {
     {
         return Err(S4Error::InvalidId(format!(
             "source alias must match [A-Za-z0-9_-]+, got '{alias}'"
+        )));
+    }
+    Ok(())
+}
+
+/// Allow only `https://`, `http://`, `ssh://`, and `git@host:path` Git remotes.
+///
+/// Rejects leading dashes (flag injection), `ext::`, `file://`, and other Git
+/// transport tricks. The CLI is local, but Makefile defaults clone third-party
+/// remotes.
+///
+/// # Errors
+///
+/// Returns [`S4Error::InvalidInput`] when the URL is empty, a flag, or an
+/// unsupported scheme.
+pub fn validate_git_url(url: &str) -> Result<()> {
+    let trimmed = url.trim();
+    if trimmed.is_empty() || trimmed.starts_with('-') {
+        return Err(S4Error::InvalidInput(format!(
+            "git URL must not be empty or start with '-': '{url}'"
+        )));
+    }
+    let lower = trimmed.to_ascii_lowercase();
+    if lower.contains("ext::")
+        || lower.starts_with("file:")
+        || lower.starts_with("fd::")
+        || lower.contains('\n')
+        || lower.contains('\0')
+    {
+        return Err(S4Error::InvalidInput(format!(
+            "git URL scheme is not allowed: '{url}'"
+        )));
+    }
+    let scp = trimmed.starts_with("git@") && trimmed.contains(':') && !trimmed.contains("://");
+    if lower.starts_with("https://")
+        || lower.starts_with("http://")
+        || lower.starts_with("ssh://")
+        || scp
+    {
+        return Ok(());
+    }
+    Err(S4Error::InvalidInput(format!(
+        "git URL must be https://, http://, ssh://, or git@host:path, got '{url}'"
+    )))
+}
+
+/// Reject `git_ref` values that Git would treat as options or path traversal.
+///
+/// # Errors
+///
+/// Returns an error for empty refs, leading dashes, or illegal characters.
+pub fn validate_git_ref(git_ref: &str) -> Result<()> {
+    if git_ref.is_empty() || git_ref.starts_with('-') {
+        return Err(S4Error::InvalidInput(format!(
+            "git ref must not be empty or start with '-': '{git_ref}'"
+        )));
+    }
+    if git_ref.contains("..") || git_ref.contains('\n') || git_ref.contains('\0') {
+        return Err(S4Error::InvalidInput(format!(
+            "git ref contains illegal characters: '{git_ref}'"
+        )));
+    }
+    if !git_ref
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | '/' | '+'))
+    {
+        return Err(S4Error::InvalidInput(format!(
+            "git ref must match [A-Za-z0-9._/+-]+, got '{git_ref}'"
         )));
     }
     Ok(())
@@ -422,23 +527,29 @@ fn run_git(args: &[&str], cwd: &Path) -> Result<()> {
     }
 }
 
-fn git_head_commit(repo_root: &Path) -> Option<String> {
+fn git_head_commit(repo_root: &Path) -> Result<String> {
     let output = Command::new("git")
         .args(["rev-parse", "HEAD"])
         .current_dir(repo_root)
         .output()
-        .ok()?;
+        .map_err(|e| S4Error::External(format!("failed to spawn git rev-parse: {e}")))?;
 
     if !output.status.success() {
-        return None;
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(S4Error::External(format!(
+            "git rev-parse HEAD failed in {}: {stderr}",
+            repo_root.display()
+        )));
     }
 
     let commit = String::from_utf8_lossy(&output.stdout).trim().to_string();
     if commit.is_empty() {
-        None
-    } else {
-        Some(commit)
+        return Err(S4Error::External(format!(
+            "git rev-parse HEAD returned empty in {}",
+            repo_root.display()
+        )));
     }
+    Ok(commit)
 }
 
 #[cfg(test)]
@@ -458,5 +569,25 @@ mod tests {
         assert!(validate_git_subpath("src/main/java").is_ok());
         assert!(validate_git_subpath("../secret").is_err());
         assert!(validate_git_subpath("/abs").is_err());
+    }
+
+    #[test]
+    fn git_url_allowlist() {
+        assert!(validate_git_url("https://github.com/broadinstitute/gatk.git").is_ok());
+        assert!(validate_git_url("git@github.com:broadinstitute/gatk.git").is_ok());
+        assert!(validate_git_url("ssh://git@github.com/org/repo.git").is_ok());
+        assert!(validate_git_url("--upload-pack=evil").is_err());
+        assert!(validate_git_url("ext::sh -c id").is_err());
+        assert!(validate_git_url("file:///etc/passwd").is_err());
+        assert!(validate_git_url("").is_err());
+    }
+
+    #[test]
+    fn git_ref_rejects_flags() {
+        assert!(validate_git_ref("main").is_ok());
+        assert!(validate_git_ref("feature/foo").is_ok());
+        assert!(validate_git_ref("-ccore.sshCommand=oops").is_err());
+        assert!(validate_git_ref("../secret").is_err());
+        assert!(validate_git_ref("").is_err());
     }
 }

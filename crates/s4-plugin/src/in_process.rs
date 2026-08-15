@@ -19,13 +19,16 @@ impl InProcessPluginHost {
     }
 
     /// Register the built-in first-party plugins shipped with S4MP.
-    #[must_use]
-    pub fn with_builtins() -> Self {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a builtin manifest is incompatible with the host API.
+    pub fn with_builtins() -> Result<Self> {
         let mut host = Self::new();
         for manifest in builtin_manifests() {
-            let _ = host.register(manifest);
+            host.register(manifest)?;
         }
-        host
+        Ok(host)
     }
 
     /// Iterate registered manifests in id order.
@@ -101,7 +104,9 @@ fn builtin_manifests() -> Vec<PluginManifest> {
                 languages: vec!["java".into()],
                 file_patterns: vec!["**/*.java".into()],
             },
-            description: Some("Tree-sitter Java frontend (in-process)".into()),
+            description: Some(
+                "Tree-sitter Java frontend (in-process; not a loadable plugin)".into(),
+            ),
         },
         PluginManifest {
             name: "s4-parser-rust".into(),
@@ -112,7 +117,9 @@ fn builtin_manifests() -> Vec<PluginManifest> {
                 languages: vec!["rust".into()],
                 file_patterns: vec!["**/*.rs".into()],
             },
-            description: Some("Tree-sitter Rust frontend (in-process)".into()),
+            description: Some(
+                "Tree-sitter Rust frontend (in-process; not a loadable plugin)".into(),
+            ),
         },
         PluginManifest {
             name: "s4-reasoner-heuristic".into(),
@@ -147,7 +154,7 @@ mod tests {
 
     #[test]
     fn builtins_register() {
-        let host = InProcessPluginHost::with_builtins();
+        let host = InProcessPluginHost::with_builtins().expect("builtins");
         assert!(host.count() >= 3);
         assert!(host
             .manifest(&PluginId("s4-reasoner-heuristic".into()))

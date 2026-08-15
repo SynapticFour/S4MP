@@ -24,7 +24,7 @@ The default v1 store implementation used by `s4-cli`:
 - Content-addressed: `Artifact::id()` / `canonical_bytes()` — compact JSON of the envelope (the bytes written to disk)
 - Atomic writes: temp file + rename
 - Idempotent writes: existing IDs are not overwritten
-- `StoreWriter::write_at` stores index records (e.g. `UsirCache`) at a predetermined id
+- `StoreWriter::write_at` writes a **CAS pointer** at the index id and stores the envelope under its content hash. `read` follows the pointer.
 
 ```rust
 use s4_storage::{FileSystemStore, StoreWriter};

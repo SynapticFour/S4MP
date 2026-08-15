@@ -4,7 +4,9 @@ Plugin system contracts — the stable extension surface for S4MP.
 
 ## Responsibility
 
-Defines plugin manifests, capability declarations, and specialized plugin traits (importer, parser, analyzer, reasoner, verifier).
+Plugin **manifests and an in-process registry** — not a loadable plugin runtime.
+
+Java/Rust frontends are first-party code in `s4-parser` (`extract_for_language`). `s4 plugin list` prints the same builtins. WASM / third-party load is deferred (ADR-016).
 
 ## Public API
 

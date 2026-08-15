@@ -15,6 +15,7 @@ pub fn run(intent: &str, prompt: Option<&str>, out: &str) -> Result<()> {
     if let Some(text) = prompt {
         let id = ArtifactId::from_content(text.as_bytes());
         context.artifacts.push(id);
+        context.prompt = Some(text.to_string());
     }
     let provider = HeuristicLlmProvider;
     let proposal = provider.reason_sync(&ReasonRequest {

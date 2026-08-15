@@ -30,9 +30,12 @@ pub trait StoreWriter {
     /// Returns an error if persistence fails.
     fn write(&mut self, artifact: &Artifact) -> Result<ArtifactId>;
 
-    /// Persist `artifact` under a caller-chosen id (secondary indexes).
+    /// Persist `artifact` under its content hash and record a **pointer** at `id`.
     ///
-    /// Unlike [`Self::write`], the id is not derived from the envelope bytes.
+    /// Secondary indexes (USIR cache keys) must not store envelopes at a non-hash
+    /// path. [`crate::FileSystemStore`] `read` follows the pointer to the
+    /// content-addressed blob. Unlike [`Self::write`], `id` is an index key, not
+    /// the envelope hash.
     ///
     /// # Errors
     ///

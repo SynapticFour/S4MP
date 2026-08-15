@@ -3,9 +3,7 @@ use crate::workspace::{count_nodes, discover_parse_units, save_graph_projection,
 use s4_analysis::usir_to_graph;
 use s4_core::Result;
 use s4_graph::NodeKind;
-use s4_parser::plugins::{
-    extract_java_module, extract_rust_module, parse_all_parallel, ParsedModules,
-};
+use s4_parser::plugins::{extract_for_language, parse_all_parallel, ParsedModules};
 use s4_parser::{LanguageId, ParseContext, ParseUnit};
 use s4_project::{snapshot_path_hashes, snapshot_physical, DefaultSourceIngestor, SourceIngestor};
 use s4_storage::StoreWriter;
@@ -238,17 +236,8 @@ fn parse_with_language(
     units: &[ParseUnit],
     ctx: &mut ParseContext<'_>,
 ) -> Result<ParsedModules> {
-    match language.0.as_str() {
-        "java" => parse_all_parallel(units, ctx.source_root, ctx.store, |unit, root| {
-            let source = s4_parser::plugins::read_unit_source(unit)?;
-            extract_java_module(&source, &unit.path, root)
-        }),
-        "rust" => parse_all_parallel(units, ctx.source_root, ctx.store, |unit, root| {
-            let source = s4_parser::plugins::read_unit_source(unit)?;
-            extract_rust_module(&source, &unit.path, root)
-        }),
-        other => Err(s4_core::S4Error::InvalidInput(format!(
-            "no parser registered for language '{other}'"
-        ))),
-    }
+    parse_all_parallel(units, ctx.source_root, ctx.store, |unit, root| {
+        let source = s4_parser::plugins::read_unit_source(unit)?;
+        extract_for_language(&language.0, &source, &unit.path, root)
+    })
 }

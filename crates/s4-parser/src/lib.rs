@@ -17,7 +17,10 @@ pub mod usir;
 
 pub use language::LanguageId;
 pub use pipeline::{ParseContext, ParsePipeline};
-pub use plugins::{extract_java_module, extract_rust_module, JavaParser, RustParser};
+pub use plugins::{
+    extract_for_language, extract_java_module, extract_rust_module, shipped_parser_languages,
+    JavaParser, RustParser,
+};
 pub use unit::ParseUnit;
 pub use usir::{
     UnresolvedCall, UsirEntity, UsirEntityKind, UsirLocalId, UsirModule, UsirRelation,

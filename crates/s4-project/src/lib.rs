@@ -19,8 +19,9 @@ pub mod workspace;
 
 pub use config::ProjectConfig;
 pub use ingest::{
-    should_skip_snapshot_path, snapshot_path_hashes, snapshot_physical, validate_git_subpath,
-    validate_source_alias, DefaultSourceIngestor, ResolvedSource, SourceIngestor,
+    should_skip_snapshot_path, snapshot_path_hashes, snapshot_physical, validate_git_ref,
+    validate_git_subpath, validate_git_url, validate_source_alias, DefaultSourceIngestor,
+    ResolvedSource, SourceIngestor,
 };
 pub use lockfile::Lockfile;
 pub use snapshot::SnapshotRef;

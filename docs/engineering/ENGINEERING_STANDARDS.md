@@ -678,7 +678,7 @@ See [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml).
 
 ### 19.3 Vulnerability Reporting
 
-- Report to: **security@synapticfour.com** (placeholder — update when public)
+- Report to: **security@synapticfour.com**
 - Response target: acknowledgment 48h, triage 7 days
 - Embargo coordinated disclosure for confirmed issues
 

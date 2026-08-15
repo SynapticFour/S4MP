@@ -29,8 +29,13 @@ impl HeuristicLlmProvider {
         let _ = request.policy.allow_network; // heuristic never calls the network
         let kind = kind_for_intent(&request.intent);
         let n = request.context.artifacts.len();
+        let excerpt = request
+            .context
+            .prompt
+            .as_deref()
+            .map_or_else(|| "(no prompt)".to_string(), trim_prompt);
         let statement = format!(
-            "heuristic {}: {} context artifact(s) — not model-backed; review before accepting",
+            "heuristic {}: {} context artifact(s); prompt: {excerpt} — not model-backed; review before accepting",
             intent_label(&request.intent),
             n
         );
@@ -102,6 +107,18 @@ fn hex32(bytes: &[u8; 32]) -> String {
     s
 }
 
+fn trim_prompt(prompt: &str) -> String {
+    const MAX: usize = 200;
+    let collapsed = prompt.split_whitespace().collect::<Vec<_>>().join(" ");
+    if collapsed.chars().count() <= MAX {
+        collapsed
+    } else {
+        let mut out: String = collapsed.chars().take(MAX).collect();
+        out.push_str("...");
+        out
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -117,6 +134,7 @@ mod tests {
                 intent: ReasonIntent::Explain,
                 context: ContextBundle {
                     artifacts: vec![ArtifactId::from_content(b"a")],
+                    prompt: Some("why is coverage low?".into()),
                 },
                 policy: ReasonPolicy::default(),
             })
@@ -124,6 +142,13 @@ mod tests {
         assert_eq!(proposal.lifecycle, ProposalLifecycle::Proposed);
         assert_eq!(proposal.kind, ProposalKind::Explanation);
         assert!(!proposal.claims.is_empty());
+        assert!(
+            proposal.claims[0]
+                .statement
+                .contains("why is coverage low?"),
+            "{}",
+            proposal.claims[0].statement
+        );
         assert_eq!(
             proposal.model.as_ref().map(|m| m.provider_id.as_str()),
             Some(HeuristicLlmProvider::ID)

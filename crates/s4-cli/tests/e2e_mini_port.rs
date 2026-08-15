@@ -107,6 +107,30 @@ fn e2e_mini_port_diff_is_deterministic() {
         ),
         "map suggest",
     );
+    let show = run_s4(
+        root,
+        &[
+            "map",
+            "show",
+            "--java",
+            "mini-java",
+            "--rust",
+            "mini-rust",
+            "--status",
+            "diverged",
+        ],
+    );
+    assert_ok(&show, "map show");
+    let show_out = String::from_utf8_lossy(&show.stdout);
+    assert!(
+        show_out.to_lowercase().contains("add"),
+        "map show should list the add pairing:\n{show_out}"
+    );
+    assert!(
+        show_out.contains("diverged"),
+        "map show should list diverged rows:\n{show_out}"
+    );
+
     assert_ok(
         &run_s4(
             root,
@@ -126,14 +150,27 @@ fn e2e_mini_port_diff_is_deterministic() {
         "unexpected title:\n{report}"
     );
     assert!(
+        report.contains("## How to review"),
+        "missing review instructions:\n{report}"
+    );
+    assert!(
+        report.contains("s4 map confirm --id"),
+        "missing confirm command:\n{report}"
+    );
+    assert!(
+        report.contains("## Missing in Rust") && report.contains("## Diverged (review these)"),
+        "expected English section headings:\n{report}"
+    );
+    assert!(
+        report.contains("`id="),
+        "diff report must print correspondence ids:\n{report}"
+    );
+    assert!(
         report.contains("Confidence bands"),
         "missing confidence bands:\n{report}"
     );
-    // Heuristic should pair shared names (add / multiply / Calculator / helper / scale).
     assert!(
-        report.contains("Diverged")
-            || report.contains("abweichend")
-            || report.to_lowercase().contains("add"),
+        report.contains("add") || report.contains("Add"),
         "expected heuristic pairings in report:\n{report}"
     );
 
@@ -142,7 +179,8 @@ fn e2e_mini_port_diff_is_deterministic() {
     assert!(json.contains("heuristic-map-v2"), "{json}");
     assert!(json.contains("confidence_bands"), "{json}");
 
-    // verify/certify are real but threshold-gated (default coverage 0 → pass).
+    // verify is a threshold check (default coverage 0 → pass).
+    // certify must NOT be Valid: heuristic maps have zero Ported rows.
     assert_ok(
         &run_s4(
             root,
@@ -158,6 +196,172 @@ fn e2e_mini_port_diff_is_deterministic() {
         ),
         "verify",
     );
+    let certify = run_s4(
+        root,
+        &[
+            "certify",
+            "--policy",
+            "default",
+            "--java",
+            "mini-java",
+            "--rust",
+            "mini-rust",
+        ],
+    );
+    assert!(
+        !certify.status.success(),
+        "heuristic-only maps must not certify Valid\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&certify.stdout),
+        String::from_utf8_lossy(&certify.stderr)
+    );
+    let cert_path = root.join(".s4/certificates/mini-java__mini-rust__default.json");
+    assert!(cert_path.is_file());
+    let cert = fs::read_to_string(&cert_path).expect("certificate");
+    assert!(
+        cert.contains("\"status\": \"invalid\""),
+        "expected invalid certificate:\n{cert}"
+    );
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn e2e_confirm_then_certify_valid() {
+    let fixture = fixture_root();
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let root = tmp.path();
+    let java_src = root.join("java");
+    let rust_src = root.join("rust");
+    copy_dir(&fixture.join("java"), &java_src);
+    copy_dir(&fixture.join("rust"), &rust_src);
+
+    assert_ok(&run_s4(root, &["init", "."]), "init");
+    assert_ok(
+        &run_s4(
+            root,
+            &[
+                "source",
+                "add",
+                "mini-java",
+                "--local",
+                java_src.to_str().unwrap(),
+                "--lang",
+                "java",
+            ],
+        ),
+        "source add java",
+    );
+    assert_ok(
+        &run_s4(
+            root,
+            &[
+                "source",
+                "add",
+                "mini-rust",
+                "--local",
+                rust_src.to_str().unwrap(),
+                "--lang",
+                "rust",
+            ],
+        ),
+        "source add rust",
+    );
+    assert_ok(
+        &run_s4(root, &["graph", "build", "--source", "mini-java"]),
+        "graph java",
+    );
+    assert_ok(
+        &run_s4(root, &["graph", "build", "--source", "mini-rust"]),
+        "graph rust",
+    );
+    assert_ok(
+        &run_s4(
+            root,
+            &[
+                "map",
+                "suggest",
+                "--java",
+                "mini-java",
+                "--rust",
+                "mini-rust",
+            ],
+        ),
+        "map suggest",
+    );
+
+    let extra = run_s4(
+        root,
+        &[
+            "map",
+            "confirm",
+            "--name",
+            "subtract",
+            "--java",
+            "mini-java",
+            "--rust",
+            "mini-rust",
+        ],
+    );
+    assert!(
+        !extra.status.success(),
+        "confirming an extra-in-target row must fail\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&extra.stdout),
+        String::from_utf8_lossy(&extra.stderr)
+    );
+    let extra_err = String::from_utf8_lossy(&extra.stderr);
+    assert!(
+        extra_err.contains("extra") || extra_err.contains("cannot confirm"),
+        "expected extra-in-target rejection:\n{extra_err}"
+    );
+
+    assert_ok(
+        &run_s4(
+            root,
+            &[
+                "map",
+                "confirm",
+                "--name",
+                "add",
+                "--java",
+                "mini-java",
+                "--rust",
+                "mini-rust",
+            ],
+        ),
+        "map confirm add",
+    );
+
+    assert_ok(
+        &run_s4(
+            root,
+            &["diff", "--java", "mini-java", "--rust", "mini-rust"],
+        ),
+        "diff after confirm",
+    );
+    let report = fs::read_to_string(root.join(".s4/reports/diff-report.md")).expect("diff report");
+    assert!(
+        report.contains("## Ported (manually confirmed)"),
+        "missing Ported section:\n{report}"
+    );
+    assert!(
+        report.to_lowercase().contains("add"),
+        "confirmed add should appear as Ported:\n{report}"
+    );
+
+    assert_ok(
+        &run_s4(
+            root,
+            &[
+                "verify",
+                "--java",
+                "mini-java",
+                "--rust",
+                "mini-rust",
+                "--min-coverage",
+                "0",
+            ],
+        ),
+        "verify after confirm",
+    );
     assert_ok(
         &run_s4(
             root,
@@ -171,11 +375,14 @@ fn e2e_mini_port_diff_is_deterministic() {
                 "mini-rust",
             ],
         ),
-        "certify",
+        "certify after confirm",
     );
-    assert!(root
-        .join(".s4/certificates/mini-java__mini-rust__default.json")
-        .is_file());
+    let cert = fs::read_to_string(root.join(".s4/certificates/mini-java__mini-rust__default.json"))
+        .expect("certificate");
+    assert!(
+        cert.contains("\"status\": \"valid\""),
+        "expected valid certificate after one Ported row:\n{cert}"
+    );
 }
 
 #[test]

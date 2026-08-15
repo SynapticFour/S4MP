@@ -24,6 +24,7 @@ pub struct PolicyEvaluation {
 /// Supported `rule_ref` values:
 /// - `verification_passed` — require `run.passed`
 /// - `min_coverage:<pct>` — require coverage ≥ pct
+/// - `min_ported:<n>` — require at least `n` `Ported` rows (heuristic `Diverged` does not count)
 /// - `no_missing` — require `run.missing == 0`
 /// - `requirements_traced` — require all requirements traced when any exist
 #[must_use]
@@ -45,6 +46,10 @@ pub fn evaluate_policy(policy: &CertificationPolicy, run: &VerificationRun) -> P
                 .strip_prefix("min_coverage:")
                 .and_then(|s| s.parse::<f32>().ok())
                 .is_some_and(|min| run.coverage_pct >= min),
+            other if other.starts_with("min_ported:") => other
+                .strip_prefix("min_ported:")
+                .and_then(|s| s.parse::<usize>().ok())
+                .is_some_and(|min| run.ported >= min),
             other => {
                 notes.push(format!("unknown rule_ref '{other}' treated as fail"));
                 false
@@ -88,17 +93,26 @@ pub fn certificate_from_evaluation(
     }
 }
 
-/// Default Phase 5 policy: verification must pass (thresholds set at verify time).
+/// Default Phase 5 policy: verification must pass **and** at least one row must
+/// be manually confirmed `Ported`. Heuristic-only maps (all `Diverged`) cannot
+/// produce [`CertificateStatus::Valid`].
 #[must_use]
 pub fn default_port_policy() -> CertificationPolicy {
     CertificationPolicy {
         name: "default".into(),
         version: "0.1.0".into(),
-        rules: vec![crate::policy::PolicyRule {
-            id: "vpass".into(),
-            description: "Underlying verification run must pass".into(),
-            rule_ref: "verification_passed".into(),
-        }],
+        rules: vec![
+            crate::policy::PolicyRule {
+                id: "vpass".into(),
+                description: "Underlying verification run must pass".into(),
+                rule_ref: "verification_passed".into(),
+            },
+            crate::policy::PolicyRule {
+                id: "ported".into(),
+                description: "At least one manually confirmed Ported row is required".into(),
+                rule_ref: "min_ported:1".into(),
+            },
+        ],
     }
 }
 
@@ -127,5 +141,29 @@ mod tests {
         );
         let eval = evaluate_policy(&default_port_policy(), &run);
         assert_eq!(eval.status, CertificateStatus::Valid);
+    }
+
+    #[test]
+    fn default_policy_rejects_heuristic_only() {
+        let run = build_verification_run(
+            &VerificationInputs {
+                java_source: "j",
+                rust_source: "r",
+                maturity: "heuristic-map-v2",
+                ported: 0,
+                diverged: 4,
+                missing: 0,
+                extra: 0,
+                java_callables: 4,
+                coverage_pct: 0.0,
+                requirements_total: 0,
+                requirements_traced: 0,
+            },
+            &s4_verification::VerificationThresholds::default(),
+        );
+        assert!(run.passed);
+        let eval = evaluate_policy(&default_port_policy(), &run);
+        assert_eq!(eval.status, CertificateStatus::Invalid);
+        assert!(eval.failed_rules.iter().any(|id| id == "ported"));
     }
 }

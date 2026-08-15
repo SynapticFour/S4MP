@@ -60,6 +60,25 @@ impl FromStr for ArtifactId {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn artifact_id_round_trips_hex() {
+        let id = ArtifactId::from_content(b"hello");
+        let hex = id.to_string();
+        assert_eq!(hex.len(), 64);
+        let parsed: ArtifactId = hex.parse().expect("parse");
+        assert_eq!(parsed, id);
+    }
+
+    #[test]
+    fn artifact_id_rejects_short_hex() {
+        assert!("abc".parse::<ArtifactId>().is_err());
+    }
+}
+
 /// Snapshot-scoped knowledge identifier (graph alias + node id).
 ///
 /// Distinct from graph-local node ids: traces name both the source graph and the

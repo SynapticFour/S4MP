@@ -24,21 +24,17 @@ cargo run -p s4-cli -- source list
 | Command | Status | Description |
 |---------|--------|-------------|
 | `init [path]` | **implemented** | Create `.s4/` layout + `workspace.json` |
-| `analyze` | **implemented** (Phase 2) | Graph all sources → map/diff for Java+Rust pair |
-| `query --source <alias> --expr <expr>` | **implemented** (Phase 3) | Filter query (`all` / `kind:*` / `label~*`) |
-| `require …` | **implemented** (Phase 4) | Requirements CRUD / OpenAPI / traces |
-| `knowledge extract` | **implemented** (Phase 4) | Naming concept extraction |
-| `verify` | **implemented** (Phase 5) | Coverage/trace thresholds over artifacts |
-| `certify --policy <name>` | **implemented** (Phase 5) | Policy over `VerificationRun` only |
-| `plugin list` | **implemented** (Phase 6) | Built-in in-process plugin manifests |
-| `reason` | **implemented** (Phase 6) | Offline heuristic proposals (always Proposed) |
+| `analyze` | **implemented** | Graph all sources → map/diff for Java+Rust pair |
+| `verify` | **implemented** | Coverage/trace thresholds over artifacts |
+| `certify --policy <name>` | **implemented** | Policy over `VerificationRun`. Default policy requires ≥1 **Ported** row — heuristic-only maps are `Invalid`. |
+| `query --source <alias> --expr <expr>` | **implemented** | Filter query (`all` / `kind:*` / `label~*`) |
+| `require …` / `knowledge` / `plugin` / `reason` | satellite | Hidden from `--help`; not the port-map product |
 
 **Maturity:** `heuristic-map-v2`. Certification is **not** semantic equivalence. LLM/heuristic outputs are never ground truth.
 
 ```bash
 s4 analyze --java mini-java --rust mini-rust
-s4 plugin list
-s4 reason --intent explain --prompt "why is coverage low?"
+s4 map show --java mini-java --rust mini-rust
 ```
 
 
@@ -93,14 +89,18 @@ Makefile shortcuts: `make graph-export-rust`, `make graph-export-svg`
 
 | Command | Description |
 |---------|-------------|
-| `map suggest --java <alias> --rust <alias>` | Heuristic Java→Rust correspondence |
-| `map confirm --id <entry-id>` | Mark entry as manually ported |
-| `map reject --id <entry-id>` | Reject a heuristic pairing |
-| `map list` | List all correspondence maps |
+| `map suggest --java <alias> --rust <alias>` | Heuristic Java→Rust correspondence (all `Diverged`) |
+| `map show [--java --rust] [--status diverged]` | Row table: short id, pairing, signatures, status |
+| `map confirm --id <prefix>` | Mark a **paired** row as Ported (unique prefix is enough) |
+| `map confirm --name <symbol>` | Same, by simple or qualified name (errors if ambiguous) |
+| `map reject --id` / `--name` | Drop a heuristic pairing (Java side becomes missing) |
+| `map list` | List maps with ported/diverged/missing/extra counts |
 
 ```bash
-s4 map suggest --java gatk-java-hc --rust hc-rust
-s4 map confirm --id abc123…
+s4 map suggest --java my-java --rust my-rust
+s4 map show --java my-java --rust my-rust --status diverged
+s4 map confirm --name add --java my-java --rust my-rust
+s4 map confirm --id abcdef012345
 s4 map list
 ```
 

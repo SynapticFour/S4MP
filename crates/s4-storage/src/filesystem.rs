@@ -58,6 +58,27 @@ impl FileSystemStore {
         })?;
         Ok(())
     }
+
+    fn write_pointer(&self, index_id: &ArtifactId, content_id: &ArtifactId) -> Result<()> {
+        if index_id == content_id {
+            return Ok(());
+        }
+        let pointer = serde_json::json!({
+            "s4_cas_pointer": 1,
+            "content_id": content_id.to_string(),
+        });
+        let bytes = serde_json::to_vec(&pointer)
+            .map_err(|e| S4Error::Storage(format!("failed to serialize CAS pointer: {e}")))?;
+        self.commit_bytes(index_id, &bytes)
+    }
+
+    fn parse_pointer(bytes: &[u8]) -> Option<ArtifactId> {
+        let value: serde_json::Value = serde_json::from_slice(bytes).ok()?;
+        if value.get("s4_cas_pointer")?.as_u64()? != 1 {
+            return None;
+        }
+        value.get("content_id")?.as_str()?.parse().ok()
+    }
 }
 
 impl StoreReader for FileSystemStore {
@@ -65,6 +86,9 @@ impl StoreReader for FileSystemStore {
         let path = self.artifact_path(id);
         match fs::read(&path) {
             Ok(bytes) => {
+                if let Some(content_id) = Self::parse_pointer(&bytes) {
+                    return self.read(&content_id);
+                }
                 let artifact: Artifact = serde_json::from_slice(&bytes).map_err(|e| {
                     S4Error::Storage(format!(
                         "failed to deserialize artifact {}: {e}",
@@ -101,8 +125,8 @@ impl StoreWriter for FileSystemStore {
     }
 
     fn write_at(&mut self, id: ArtifactId, artifact: &Artifact) -> Result<()> {
-        let bytes = artifact.canonical_bytes()?;
-        self.commit_bytes(&id, &bytes)
+        let content_id = self.write(artifact)?;
+        self.write_pointer(&id, &content_id)
     }
 }
 
@@ -139,5 +163,27 @@ mod tests {
         let on_disk = std::fs::read(store.artifact_path(&id)).expect("file");
         assert_eq!(on_disk, artifact.canonical_bytes().expect("bytes"));
         assert_eq!(id, artifact.id().expect("id"));
+    }
+
+    #[test]
+    fn write_at_stores_pointer_not_raw_envelope() {
+        let mut store = temp_store();
+        let artifact = Artifact {
+            kind: ArtifactKind::UsirCache,
+            schema_version: SchemaVersion::CURRENT,
+            payload: serde_json::json!({"usir_id": "abc"}),
+        };
+        let index = ArtifactId::from_content(b"index-key");
+        store.write_at(index, &artifact).expect("write_at");
+        let loaded = store.read(&index).expect("read").expect("artifact");
+        assert_eq!(loaded.kind, ArtifactKind::UsirCache);
+        let on_disk = std::fs::read(store.artifact_path(&index)).expect("file");
+        assert!(
+            String::from_utf8_lossy(&on_disk).contains("s4_cas_pointer"),
+            "index path must be a pointer, got {}",
+            String::from_utf8_lossy(&on_disk)
+        );
+        let content_id = artifact.id().expect("id");
+        assert!(store.contains(&content_id).expect("contains content"));
     }
 }

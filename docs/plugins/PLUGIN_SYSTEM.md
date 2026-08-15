@@ -1,10 +1,10 @@
 # S4MP Plugin System
 ## Architecture Specification v0.1
 
-> **Status:** Design baseline — no implementation  
-> **Contract crate:** `s4-plugin`  
-> **Future implementation crates:** `s4-plugin-host`, `s4-plugin-registry`, `s4-plugin-sdk`  
-> **Principle:** The core knows **traits and manifests only** — never implementations.
+> **Status:** Target design. Shipped code is an **in-process registry of first-party frontends** (`s4 plugin list`), not a loader, sandbox, or third-party SDK.
+> **Contract crate:** `s4-plugin` (manifests + host trait)
+> **Shipped:** Java/Rust Tree-sitter frontends dispatched by language id in `s4-parser` (`extract_for_language`). WASM deferred: [ADR-016](../adr/0016-phase6-in-process-host-wasm-deferred.md).
+> **Principle:** Do not list a plugin in the host unless `graph build` / `reason` actually uses it.
 
 ---
 

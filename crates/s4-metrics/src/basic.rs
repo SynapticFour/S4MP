@@ -101,12 +101,14 @@ mod tests {
                     kind: NodeKind::Callable,
                     label: "a".into(),
                     signature: None,
+                    qualified: None,
                 },
                 Node {
                     id: NodeId(1),
                     kind: NodeKind::Callable,
                     label: "b".into(),
                     signature: None,
+                    qualified: None,
                 },
             ],
             vec![Edge {

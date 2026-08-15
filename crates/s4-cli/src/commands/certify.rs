@@ -39,8 +39,10 @@ pub fn run(policy_name: &str, java: &str, rust: &str) -> Result<()> {
     let evaluation = evaluate_policy(&policy, &verification);
     let issued_at = s4_core::utc_rfc3339();
     let verification_artifact = ArtifactId::from_content(&bytes);
+    let mut id_bytes = [0_u8; 8];
+    id_bytes.copy_from_slice(&verification_artifact.as_bytes()[..8]);
     let certificate = certificate_from_evaluation(
-        CertificateId(1),
+        CertificateId(u64::from_be_bytes(id_bytes)),
         &policy,
         &evaluation,
         verification_artifact,

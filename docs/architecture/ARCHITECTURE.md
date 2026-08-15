@@ -1,7 +1,9 @@
 # SynapticFour Method Platform (S4MP)
 ## Architecture Specification v0.1
 
-> **Status:** Approved skeleton baseline
+> **Status:** Target model, not a description of the shipped binary.
+> **Shipped today:** `s4` CLI — heuristic Java↔Rust port maps (`heuristic-map-v2`).
+> **Not shipped:** HTTP/gRPC API, IDE/UI, WASM plugin sandbox, networked LLM, S4QL, distributed graph store.
 > **Principle:** Stable contracts at the center, volatile implementations at the edge.
 
 ---

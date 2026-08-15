@@ -82,12 +82,97 @@ pub struct CorrespondenceEntry {
     pub method: CorrespondenceMethod,
     /// Optional reviewer or pipeline note.
     pub note: Option<String>,
-    /// Display label for reports (source label, or target label for extras).
+    /// Display label for reports (`Java ↔ Rust`, or a single side for missing/extra).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
+    /// Java-side signature when captured at suggestion time.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_signature: Option<String>,
+    /// Rust-side signature when captured at suggestion time.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_signature: Option<String>,
     /// `true` when a retained manual row no longer appears in fresh suggestions (e.g. source node removed).
     #[serde(default)]
     pub stale: bool,
+}
+
+/// Prefix of a correspondence id shown in tables and reports.
+pub const SHORT_ENTRY_ID_LEN: usize = 12;
+
+/// First [`SHORT_ENTRY_ID_LEN`] hex characters of a correspondence id.
+#[must_use]
+pub fn short_entry_id(id: &str) -> &str {
+    if id.len() > SHORT_ENTRY_ID_LEN {
+        &id[..SHORT_ENTRY_ID_LEN]
+    } else {
+        id
+    }
+}
+
+/// Entries whose id equals `query` (case-insensitive) or starts with it.
+#[must_use]
+pub fn entries_matching_id<'a>(
+    entries: &'a [CorrespondenceEntry],
+    query: &str,
+) -> Vec<&'a CorrespondenceEntry> {
+    let q = query.trim().to_ascii_lowercase();
+    if q.is_empty() {
+        return Vec::new();
+    }
+    let exact: Vec<_> = entries
+        .iter()
+        .filter(|e| e.id.eq_ignore_ascii_case(&q))
+        .collect();
+    if !exact.is_empty() {
+        return exact;
+    }
+    entries
+        .iter()
+        .filter(|e| e.id.to_ascii_lowercase().starts_with(&q))
+        .collect()
+}
+
+/// Entries whose display name, qualified side, or simple identifier equals `query`.
+#[must_use]
+pub fn entries_matching_name<'a>(
+    entries: &'a [CorrespondenceEntry],
+    query: &str,
+) -> Vec<&'a CorrespondenceEntry> {
+    let q = query.trim().to_ascii_lowercase();
+    if q.is_empty() {
+        return Vec::new();
+    }
+    entries
+        .iter()
+        .filter(|e| entry_name_keys(e).iter().any(|k| k == &q))
+        .collect()
+}
+
+/// Reviewer-facing name keys for `entry` (`add`, `Calculator.add`, pairing string).
+#[must_use]
+pub fn entry_name_keys(entry: &CorrespondenceEntry) -> Vec<String> {
+    let mut keys = Vec::new();
+    let Some(display) = entry.display_name.as_deref().filter(|s| !s.is_empty()) else {
+        return keys;
+    };
+    push_unique_key(&mut keys, display);
+    for side in display.split(" ↔ ") {
+        push_unique_key(&mut keys, side);
+        for seg in side.split("::") {
+            push_unique_key(&mut keys, seg);
+            if let Some((_, last)) = seg.rsplit_once('.') {
+                push_unique_key(&mut keys, last);
+            }
+        }
+    }
+    keys
+}
+
+fn push_unique_key(keys: &mut Vec<String>, raw: &str) {
+    let key = raw.trim().to_ascii_lowercase();
+    if !key.is_empty() && !keys.iter().any(|k| k == &key) {
+        keys.push(key);
+    }
 }
 
 /// Minimum combined similarity to emit a heuristic pairing.
@@ -100,7 +185,8 @@ const SIG_WEIGHT: f32 = 0.4;
 struct TokenizedNode {
     id: NodeId,
     kind: NodeKind,
-    label: String,
+    display: String,
+    signature: Option<String>,
     name_tokens: HashSet<String>,
     sig_tokens: Option<HashSet<String>>,
 }
@@ -227,7 +313,9 @@ fn emit_correspondence_entries(
                 confidence: similarity,
                 method,
                 note: Some(note.to_string()),
-                display_name: Some(java_node.label.clone()),
+                display_name: Some(format!("{} ↔ {}", java_node.display, rust_node.display)),
+                source_signature: java_node.signature.clone(),
+                target_signature: rust_node.signature.clone(),
                 stale: false,
             });
         } else {
@@ -241,7 +329,9 @@ fn emit_correspondence_entries(
                 confidence: best.map_or(0.0, |(s, _)| s),
                 method,
                 note: Some("no Rust name/signature match above similarity threshold".to_string()),
-                display_name: Some(java_node.label.clone()),
+                display_name: Some(java_node.display.clone()),
+                source_signature: java_node.signature.clone(),
+                target_signature: None,
                 stale: false,
             });
         }
@@ -263,7 +353,9 @@ fn emit_correspondence_entries(
             confidence: 0.0,
             method: CorrespondenceMethod::NameHeuristic,
             note: Some("Rust node has no Java heuristic counterpart".to_string()),
-            display_name: Some(rust_node.label.clone()),
+            display_name: Some(rust_node.display.clone()),
+            source_signature: None,
+            target_signature: rust_node.signature.clone(),
             stale: false,
         });
     }
@@ -346,7 +438,8 @@ fn tokenize_node(node: &Node) -> TokenizedNode {
     TokenizedNode {
         id: node.id,
         kind: node.kind.clone(),
-        label: node.label.clone(),
+        display: node.display_label().to_string(),
+        signature: node.signature.clone(),
         name_tokens: tokenize_name(&node.label),
         sig_tokens: node.signature.as_deref().map(tokenize_signature),
     }
@@ -547,6 +640,8 @@ mod tests {
             method,
             note: None,
             display_name: None,
+            source_signature: None,
+            target_signature: None,
             stale: false,
         }
     }
@@ -557,6 +652,7 @@ mod tests {
             kind: NodeKind::Callable,
             label: label.into(),
             signature: None,
+            qualified: None,
         }
     }
 
@@ -579,12 +675,14 @@ mod tests {
             kind: NodeKind::Callable,
             label: "add".into(),
             signature: Some("add(int a, int b):int".into()),
+            qualified: Some("Calculator.add".into()),
         };
         let rust = Node {
             id: NodeId(1),
             kind: NodeKind::Callable,
             label: "add".into(),
             signature: Some("add(a: i32, b: i32)->i32".into()),
+            qualified: Some("Calculator::add".into()),
         };
         let (score, method) = score_pair(&java, &rust);
         assert!(score >= SIMILARITY_THRESHOLD, "{score}");
@@ -675,5 +773,39 @@ mod tests {
         );
         let merged = merge_correspondences(vec![old], vec![new.clone()]);
         assert_eq!(merged, vec![new]);
+    }
+
+    #[test]
+    fn pairing_display_uses_qualified_names() {
+        let java = Node {
+            id: NodeId(0),
+            kind: NodeKind::Callable,
+            label: "add".into(),
+            signature: Some("add(int,int):int".into()),
+            qualified: Some("Calculator.add".into()),
+        };
+        let rust = Node {
+            id: NodeId(1),
+            kind: NodeKind::Callable,
+            label: "add".into(),
+            signature: Some("add(a: i32, b: i32)->i32".into()),
+            qualified: Some("Calculator::add".into()),
+        };
+        let java_g = InMemoryGraphView::new(vec![java], vec![]);
+        let rust_g = InMemoryGraphView::new(vec![rust], vec![]);
+        let entries =
+            suggest_correspondences(&java_g, &GraphId("j".into()), &rust_g, &GraphId("r".into()));
+        assert_eq!(entries.len(), 1);
+        assert_eq!(
+            entries[0].display_name.as_deref(),
+            Some("Calculator.add ↔ Calculator::add")
+        );
+        assert!(entries[0].source_signature.is_some());
+        assert!(entries[0].target_signature.is_some());
+        assert_eq!(entries_matching_name(&entries, "add").len(), 1);
+        assert_eq!(
+            entries_matching_id(&entries, short_entry_id(&entries[0].id)).len(),
+            1
+        );
     }
 }

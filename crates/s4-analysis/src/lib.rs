@@ -23,9 +23,10 @@ pub mod pipeline;
 
 pub use architecture::{ArchitectureAnalyzer, Boundary, Pattern, PatternKind};
 pub use correspondence::{
-    load_correspondence_map, merge_correspondences, save_correspondence_map,
-    suggest_correspondences, CorrespondenceEntry, CorrespondenceMethod, CorrespondenceStatus,
-    GraphId, NodeRef,
+    entries_matching_id, entries_matching_name, entry_name_keys, load_correspondence_map,
+    merge_correspondences, save_correspondence_map, short_entry_id, suggest_correspondences,
+    CorrespondenceEntry, CorrespondenceMethod, CorrespondenceStatus, GraphId, NodeRef,
+    SHORT_ENTRY_ID_LEN,
 };
 pub use diff_report::{
     build_diff_report, confidence_bands, render_json, render_markdown, ConfidenceBands, DiffReport,

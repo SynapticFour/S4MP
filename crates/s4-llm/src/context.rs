@@ -5,4 +5,6 @@ use s4_core::ArtifactId;
 pub struct ContextBundle {
     /// Artifact IDs comprising the context window.
     pub artifacts: Vec<ArtifactId>,
+    /// Optional operator prompt (read by providers; never treated as ground truth).
+    pub prompt: Option<String>,
 }

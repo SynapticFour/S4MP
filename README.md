@@ -1,78 +1,69 @@
-# SynapticFour Method Platform (S4MP)
+# S4MP — heuristic Java↔Rust port maps
 
-A production-grade, modular, plugin-driven platform for software knowledge extraction, analysis, and certification.
+A **local CLI** that parses Java and Rust with Tree-sitter, builds a name graph, and suggests correspondences by **token Jaccard** (optional signatures). Maturity: `heuristic-map-v2`.
 
-**The knowledge model is the product. AI is one consumer among many.**
+**This is not** a production knowledge platform, not semantic equivalence, not a loadable plugin runtime, and not certification of a port. `s4 certify` evaluates policy over verification counters; the default policy **rejects** heuristic-only maps (zero manually confirmed `Ported` rows).
 
-> **Maturity:** `heuristic-map-v2`
-> What ships today is a **heuristic Java↔Rust port map** (`source` → `graph` → `map` → `diff`) using name (+ optional signature) similarity.
-> It is **not** semantic equivalence. `s4 verify` / `s4 certify` evaluate coverage/policy thresholds only; `s4 reason` outputs stay **Proposed**.
-> Roadmap: [Implementation Roadmap](docs/guides/IMPLEMENTATION_ROADMAP.md).
+Roadmap leftovers (HTTP API, UI, planner, WASM sandbox, networked LLM) are **parked stubs or specs**, not shipped software.
 
-**Maintenance budget:** fenced satellite (org L6). Monthly CI/audit hygiene only unless a named conversation needs it.
+**Maintainer:** one person (`Synaptic Four`). Treat availability as best-effort. There is no review roster.
 
-## Quick Start (Porting Pipeline)
+## Quick Start (intended loop)
 
-The fastest way to compare a Java codebase with a Rust port and get a Markdown diff report:
+The product is a **reviewable port map**, not a certificate of semantic equivalence.
 
-### Prerequisites
+```
+init → source add → graph build → map suggest → map show → map confirm → diff → verify → certify
+```
 
-- Rust stable (`rustfmt`, `clippy`)
-- Git (for cloning Java sources)
-- `make` (optional, recommended)
+`s4 certify` is Valid only after **at least one** row is manually `Ported`. Heuristic suggestions stay `Diverged`.
+
+### Smoke test (no network)
 
 ```bash
 cargo build --workspace
+make e2e-fixture
 ```
 
-### Using the Makefile
+That runs the bundled `tests/fixtures/mini-port/` trees through suggest, review, confirm, and certify.
+
+### Your own trees
+
+```bash
+cargo run -p s4-cli -- init .
+cargo run -p s4-cli -- source add my-java --local /path/to/java --lang java
+cargo run -p s4-cli -- source add my-rust --local /path/to/rust --lang rust
+cargo run -p s4-cli -- graph build --source my-java
+cargo run -p s4-cli -- graph build --source my-rust
+cargo run -p s4-cli -- map suggest --java my-java --rust my-rust
+cargo run -p s4-cli -- map show --java my-java --rust my-rust --status diverged
+cargo run -p s4-cli -- map confirm --name add --java my-java --rust my-rust
+cargo run -p s4-cli -- diff --java my-java --rust my-rust
+cargo run -p s4-cli -- verify --java my-java --rust my-rust
+cargo run -p s4-cli -- certify --java my-java --rust my-rust
+```
+
+### Optional: GATK HaplotypeCaller slice
 
 From the repository root, with your Rust port at `../my-hc-port`:
 
 ```bash
-make sources RUST_LOCAL=../my-hc-port   # register GATK HC slice + Rust port
-make diff                               # graph → map → .s4/reports/diff-report.md
+make sources RUST_LOCAL=../my-hc-port
+make show          # graph → map suggest → table with short ids
+make diff          # Markdown report with `id=` on every row
 ```
 
-Defaults target the **GATK HaplotypeCaller** Java slice. Override any variable:
+Then confirm from the table or report:
 
 ```bash
-make graph JAVA_SUBPATH=src/main/java/org/broadinstitute/hellbender/tools/walkers/haplotypecaller
-make diff RUST_LOCAL=../other-port
+s4 map confirm --id <12-char-prefix> --java gatk-java-hc --rust hc-rust
+# or
+s4 map confirm --name <symbol> --java gatk-java-hc --rust hc-rust
 ```
 
-See [`Makefile`](Makefile) for all targets (`sources`, `graph`, `graph-export`, `graph-export-svg`, `map`, `diff`, `open-report`, `install-hooks`, `clean-cache`).
+See [`Makefile`](Makefile) for targets (`sources`, `graph`, `graph-export`, `map`, `show`, `diff`, `e2e-fixture`, `install-hooks`, `clean-cache`).
 
-### Using the CLI directly
-
-```bash
-# Register sources
-cargo run -p s4-cli -- source add gatk-java-hc \
-  --git https://github.com/broadinstitute/gatk.git \
-  --subpath src/main/java/org/broadinstitute/hellbender/tools/walkers/haplotypecaller \
-  --lang java
-cargo run -p s4-cli -- source add hc-rust --local ../my-hc-port --lang rust
-
-# Build graphs, suggest mappings, render report
-cargo run -p s4-cli -- graph build --source gatk-java-hc
-cargo run -p s4-cli -- graph build --source hc-rust
-cargo run -p s4-cli -- map suggest --java gatk-java-hc --rust hc-rust
-cargo run -p s4-cli -- diff --java gatk-java-hc --rust hc-rust
-
-# Visualize Rust graph (requires graph build + Graphviz for SVG)
-cargo run -p s4-cli -- graph export --source hc-rust --format dot --filter callable,calls,type,defines
-dot -Tsvg .s4/exports/hc-rust.dot -o .s4/exports/hc-rust.svg
-```
-
-Or with Make:
-
-```bash
-make graph-export-rust    # builds graph + exports .s4/exports/hc-rust.dot
-make graph-export-svg     # also renders .s4/exports/hc-rust.svg (needs `dot`)
-make open-report          # print path to diff report
-```
-
-**Full beginner guide:** [Porting Workflow](docs/guides/PORTING_WORKFLOW.md) — step-by-step CLI reference, troubleshooting, pipeline internals.
+**Full beginner guide:** [Porting Workflow](docs/guides/PORTING_WORKFLOW.md)
 
 **CLI command reference:** [`crates/s4-cli/README.md`](crates/s4-cli/README.md)
 
@@ -93,28 +84,28 @@ Commands create a local `.s4/` directory (git-ignored):
 
 ## Workspace
 
-This repository is a [Cargo workspace](https://doc.rust-lang.org/cargo/reference/workspaces.html) of 18 focused crates. Each crate owns a single concern, exposes a documented public API of traits and types, and compiles independently.
+This repository is a Cargo workspace of **15 built crates** plus **3 parked** trait stubs (`s4-planner`, `s4-api`, `s4-ui`) that are excluded from the default build. The live surface is `s4-cli`.
 
 ```
 crates/
   s4-core            Foundation: IDs, errors, versioning
-  s4-storage         Content-addressed artifact store
-  s4-events          Event bus contracts (`RecordingEventSink` is the live impl)
-  s4-plugin          Plugin system contracts (`InProcessPluginHost` registers manifests)
-  s4-project         Project workspace & source ingestion
-  s4-parser          Universal parsing & USIR (Java/Rust v1)
-  s4-graph           Universal code graph
-  s4-knowledge       Software knowledge graph (extract + proposed facts)
-  s4-requirements    Requirements graph & traceability
-  s4-metrics         Complexity & metrics (`basic` collector)
-  s4-analysis        Lowering, correspondence, diff reports
-  s4-verification    Port-diff verification (`Verifier` trait is a future contract)
-  s4-certification   Policy evaluation (`CertificateIssuer` is a future contract)
-  s4-llm             LLM-agnostic reasoning (heuristic provider; network off)
-  s4-cli             Command-line interface (`s4`)
+  s4-storage         Content-addressed artifact store (pointers for indexes)
+  s4-events          In-process event recorder
+  s4-plugin          Manifest types + in-process registry (not a plugin loader)
+  s4-project         Source ingest (git URL allowlist) & snapshots (size caps)
+  s4-parser          Tree-sitter Java/Rust frontends → USIR
+  s4-graph           In-memory code graph + filter query
+  s4-knowledge       Naming-heuristic concepts (Proposed)
+  s4-requirements    Requirements JSON + name traces
+  s4-metrics         Basic graph counts
+  s4-analysis        Lowering, exclusive correspondence, diff reports
+  s4-verification    Coverage/threshold runs (not semantic equivalence)
+  s4-certification   Policy over VerificationRun (`min_ported:1` default)
+  s4-llm             Offline heuristic reasoner (Proposed only)
+  s4-cli             `s4` CLI
 ```
 
-Parked (not built in the default workspace; types-only until a server/planner exists): `s4-planner`, `s4-api`, `s4-ui`.
+Parked (not built): `s4-planner`, `s4-api`, `s4-ui`.
 
 ## Dependency Tiers
 
@@ -155,34 +146,29 @@ See [Contributing](CONTRIBUTING.md) and [Engineering Standards](docs/engineering
 
 ## Documentation
 
+Architecture documents under `docs/` describe a **target** model. They are not a feature checklist.
+
 ### Guides
 
-- **[Implementation Roadmap](docs/guides/IMPLEMENTATION_ROADMAP.md)** — phased delivery (P0–P6)
-- **[Porting Workflow](docs/guides/PORTING_WORKFLOW.md)** — Java→Rust diff pipeline (Makefile + CLI)
+- **[Implementation Roadmap](docs/guides/IMPLEMENTATION_ROADMAP.md)** — done vs deferred
+- **[Porting Workflow](docs/guides/PORTING_WORKFLOW.md)** — Java→Rust diff pipeline
 
 ### Architecture & Standards
 
-- [Engineering Standards](docs/engineering/ENGINEERING_STANDARDS.md) — **mandatory before implementation**
+- [Engineering Standards](docs/engineering/ENGINEERING_STANDARDS.md)
 - [Contributing](CONTRIBUTING.md)
-- [Architecture Specification](docs/architecture/ARCHITECTURE.md)
-- [Canonical Data Model](docs/model/CANONICAL_MODEL.md)
-- [Universal Code Graph](docs/graph/UNIVERSAL_CODE_GRAPH.md)
-- [Plugin System](docs/plugins/PLUGIN_SYSTEM.md)
-- [Parser Framework (Tree-sitter)](docs/parser/PARSER_FRAMEWORK.md)
-- [Software Knowledge Graph](docs/knowledge/SOFTWARE_KNOWLEDGE_GRAPH.md)
-- [Requirements Graph](docs/requirements/REQUIREMENTS_GRAPH.md)
-- [Verification Engine](docs/verification/VERIFICATION_ENGINE.md)
+- [Architecture Specification](docs/architecture/ARCHITECTURE.md) (target model)
 - [ADR Index](docs/adr/README.md)
 - Per-crate README: `crates/<name>/README.md`
 
 ## Design Rules
 
-0. **Follow [Engineering Standards](docs/engineering/ENGINEERING_STANDARDS.md)** — all implementation must comply.
-1. **Traits and contracts first** — extend via documented public APIs; v1 porting pipeline is implemented in `s4-cli` + capability crates.
-2. **No LLM provider dependencies** — `s4-llm` defines interfaces; providers are plugins.
-3. **Primary knowledge artifacts are CAS** — USIR, graphs, snapshots, and correspondence maps go through `s4-storage`. Workspace pointers (source registry, manifests) and human reports may be sidecars under `.s4/`.
-4. **LLM outputs are always `Proposed` lifecycle** — see `s4-knowledge`.
-5. **Heuristic correspondences require manual confirmation** — never auto-certified as ported.
+0. **Follow [Engineering Standards](docs/engineering/ENGINEERING_STANDARDS.md)** when implementing.
+1. **Do not market specs as features.** Architecture docs under `docs/` are a target model; the CLI is the product.
+2. **No LLM provider dependencies** — `s4-llm` is heuristic/offline unless a future provider is added as an explicit crate.
+3. **Primary knowledge artifacts are CAS** — envelopes live under their Blake3 hash; secondary indexes are pointers.
+4. **LLM/heuristic outputs are always `Proposed`.**
+5. **Heuristic correspondences are never `Ported`.** Manual confirmation only. Default `s4 certify` fails until that exists.
 
 ## License
 
@@ -191,4 +177,4 @@ Licensed under either of
 - Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
 - MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
 
-at your option.
+at your option. See [LICENSE](LICENSE).

@@ -8,8 +8,8 @@ use tree_sitter::Node;
 
 /// Tree-sitter frontend for Rust sources (heuristic USIR extraction).
 ///
-/// Call edges use substring matching for `name(` within the same module; unresolved names
-/// are linked across modules during graph lowering. Signatures are captured when present.
+/// Call edges come from `call_expression` AST nodes. Unresolved names are linked
+/// across modules during graph lowering. Signatures are captured when present.
 #[derive(Clone, Debug, Default)]
 pub struct RustParser;
 
@@ -36,12 +36,22 @@ pub fn extract_rust_module(
     let language: tree_sitter::Language = tree_sitter_rust::LANGUAGE.into();
     let tree = parse_tree(&mut parser, &language, source)?;
     let mut builder = UsirModuleBuilder::new(path, source_root)?;
-    walk_rust_node(tree.root_node(), source, &mut builder);
+    walk_rust_node(tree.root_node(), source, &mut builder, None);
     Ok(builder.build())
 }
 
-fn walk_rust_node(node: Node<'_>, source: &str, builder: &mut UsirModuleBuilder) {
+fn walk_rust_node(
+    node: Node<'_>,
+    source: &str,
+    builder: &mut UsirModuleBuilder,
+    impl_type: Option<&str>,
+) {
     match node.kind() {
+        "impl_item" => {
+            let ty = child_by_field(&node, "type", source).map(str::to_string);
+            walk_rust_children(node, source, builder, ty.as_deref());
+            return;
+        },
         "struct_item" | "enum_item" | "trait_item" | "union_item" => {
             if let Some(name) = child_by_field(&node, "name", source) {
                 builder.add_type(name);
@@ -50,14 +60,14 @@ fn walk_rust_node(node: Node<'_>, source: &str, builder: &mut UsirModuleBuilder)
         "function_item" => {
             if let Some(name) = child_by_field(&node, "name", source) {
                 let signature = rust_fn_signature(name, node, source);
-                let id = builder.add_callable(name, Some(signature));
+                let qualified = impl_type.map(|ty| format!("{ty}::{name}"));
+                let id = builder.add_callable(name, qualified.as_deref(), Some(signature));
                 add_type_references(id, node, source, builder);
                 if let Some(body) = node.child_by_field_name("body") {
-                    if let Ok(body_text) = body.utf8_text(source.as_bytes()) {
-                        builder.defer_calls(id, body_text.to_string());
-                    }
+                    builder.defer_calls(id, super::collect_rust_callee_names(body, source));
                 }
             }
+            return;
         },
         "const_item" | "static_item" | "field_declaration" => {
             if let Some(name) = child_by_field(&node, "name", source) {
@@ -67,10 +77,19 @@ fn walk_rust_node(node: Node<'_>, source: &str, builder: &mut UsirModuleBuilder)
         _ => {},
     }
 
+    walk_rust_children(node, source, builder, impl_type);
+}
+
+fn walk_rust_children(
+    node: Node<'_>,
+    source: &str,
+    builder: &mut UsirModuleBuilder,
+    impl_type: Option<&str>,
+) {
     let mut cursor = node.walk();
     if cursor.goto_first_child() {
         loop {
-            walk_rust_node(cursor.node(), source, builder);
+            walk_rust_node(cursor.node(), source, builder, impl_type);
             if !cursor.goto_next_sibling() {
                 break;
             }
@@ -157,5 +176,58 @@ fn add(a: i32, b: i32) -> i32 { a + b }
         let sig = add.signature.as_deref().expect("signature");
         assert!(sig.contains("add"), "{sig}");
         assert!(sig.contains("i32"), "{sig}");
+        assert!(add.qualified.is_none());
+    }
+
+    #[test]
+    fn impl_method_is_qualified() {
+        let source = r"
+pub struct Calculator;
+impl Calculator {
+    pub fn add(a: i32, b: i32) -> i32 { a + b }
+}
+fn helper(x: i32) -> i32 { x }
+";
+        let source_root = std::env::temp_dir();
+        let module = extract_rust_module(source, "example.rs", &source_root).unwrap();
+        let add = module
+            .entities
+            .iter()
+            .find(|e| e.name == "add")
+            .expect("add");
+        assert_eq!(add.qualified.as_deref(), Some("Calculator::add"));
+        let helper = module
+            .entities
+            .iter()
+            .find(|e| e.name == "helper")
+            .expect("helper");
+        assert!(helper.qualified.is_none());
+    }
+
+    #[test]
+    fn comments_and_strings_are_not_calls() {
+        let source = r#"
+fn caller() {
+    callee();
+    // callee();
+    let _ = "callee()";
+}
+fn callee() {}
+"#;
+        let source_root = std::env::temp_dir();
+        let module = extract_rust_module(source, "example.rs", &source_root).unwrap();
+        assert!(has_calls_relation(&module, "caller", "callee"));
+        let caller = module
+            .entities
+            .iter()
+            .find(|e| e.name == "caller")
+            .map(|e| e.id)
+            .unwrap();
+        let n = module
+            .relations
+            .iter()
+            .filter(|r| r.from == caller && r.kind == UsirRelationKind::Calls)
+            .count();
+        assert_eq!(n, 1);
     }
 }
