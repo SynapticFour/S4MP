@@ -1,6 +1,8 @@
 # Contributing to S4MP
 
-This repository is maintained by **one person**. Pull requests are welcome; they are not the current default workflow. Until branch protection is enabled, commits may land directly on `main`. CI on `main` is the gate that matters.
+This repository is maintained by **one person**. Pull requests are welcome; they are not the current default workflow.
+
+`main` requires CI status checks (`rustfmt`, `clippy-test-doc`, `dependency-tiers`, `cargo-deny`). There is **no** required review roster. Direct pushes by the repo admin are still allowed (`enforce_admins` off). Do not force-push `main`.
 
 ## Before You Code
 
