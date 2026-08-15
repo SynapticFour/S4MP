@@ -6,6 +6,12 @@ Command-line interface for the SynapticFour Method Platform.
 
 `s4` — primary CLI entry point (`cargo run -p s4-cli -- …`).
 
+There is no crates.io release. Optional PATH install from this checkout:
+
+```bash
+cargo install --path crates/s4-cli --locked
+```
+
 ## Getting Started
 
 See the **[Porting Workflow Guide](../../docs/guides/PORTING_WORKFLOW.md)** for a beginner walkthrough (Makefile + manual CLI).
@@ -121,7 +127,9 @@ The repository root [`Makefile`](../../Makefile) wraps the porting pipeline:
 
 ```bash
 make sources RUST_LOCAL=../my-hc-port
+make show
 make diff
+make verify    # after at least one map confirm
 ```
 
 See [Porting Workflow Guide](../../docs/guides/PORTING_WORKFLOW.md) for all targets and variables.

@@ -56,16 +56,24 @@ make diff          # Markdown report with `id=` on every row
 Then confirm from the table or report:
 
 ```bash
-s4 map confirm --id <12-char-prefix> --java gatk-java-hc --rust hc-rust
+cargo run -p s4-cli -- map confirm --id <12-char-prefix> --java gatk-java-hc --rust hc-rust
 # or
-s4 map confirm --name <symbol> --java gatk-java-hc --rust hc-rust
+cargo run -p s4-cli -- map confirm --name <symbol> --java gatk-java-hc --rust hc-rust
 ```
 
-See [`Makefile`](Makefile) for targets (`sources`, `graph`, `graph-export`, `map`, `show`, `diff`, `e2e-fixture`, `install-hooks`, `clean-cache`).
+See [`Makefile`](Makefile) for targets (`sources`, `graph`, `map`, `show`, `diff`, `verify`, `certify`, `e2e-fixture`, `install-hooks`, `clean-cache`).
+
+**Install on PATH (optional):** there is no crates.io release and no tagged `0.1.0`. From this checkout:
+
+```bash
+cargo install --path crates/s4-cli --locked
+```
 
 **Full beginner guide:** [Porting Workflow](docs/guides/PORTING_WORKFLOW.md)
 
 **CLI command reference:** [`crates/s4-cli/README.md`](crates/s4-cli/README.md)
+
+**Docs index:** [`docs/README.md`](docs/README.md)
 
 ### Workspace artifacts
 
@@ -150,8 +158,9 @@ Architecture documents under `docs/` describe a **target** model. They are not a
 
 ### Guides
 
-- **[Implementation Roadmap](docs/guides/IMPLEMENTATION_ROADMAP.md)** — done vs deferred
-- **[Porting Workflow](docs/guides/PORTING_WORKFLOW.md)** — Java→Rust diff pipeline
+- **[Implementation Roadmap](docs/guides/IMPLEMENTATION_ROADMAP.md)** — shipped vs parked
+- **[Porting Workflow](docs/guides/PORTING_WORKFLOW.md)** — review → confirm → certify
+- **[Docs index](docs/README.md)** — what is product vs target spec
 
 ### Architecture & Standards
 

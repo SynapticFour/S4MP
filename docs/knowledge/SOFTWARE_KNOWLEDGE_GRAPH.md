@@ -1,9 +1,11 @@
 # Software Knowledge Graph (SKG)
 ## Architecture Specification v0.1
 
-> **Status:** Design baseline — no implementation  
-> **Contract crate:** `s4-knowledge` (+ `s4-requirements` for trace edges)  
-> **Companion:** [Universal Code Graph](../graph/UNIVERSAL_CODE_GRAPH.md) (structure — not meaning)  
+> **Status:** Target spec.
+> **Shipped:** naming-heuristic concept extract (`s4 knowledge extract`, satellite, always Proposed). The Digital Twin / full SKG is **not** shipped.
+> **Product:** [Porting Workflow](../guides/PORTING_WORKFLOW.md)
+> **Contract crate:** `s4-knowledge` (+ `s4-requirements` for trace edges)
+> **Companion:** [Universal Code Graph](../graph/UNIVERSAL_CODE_GRAPH.md) (structure — not meaning)
 > **Principle:** The SKG is the **Digital Twin** of what the software *means*, not what it *contains*.
 
 ---

@@ -2,6 +2,8 @@
 
 RFCs propose **cross-cutting changes** that affect multiple crates, public plugin APIs, CI policy, or contributor workflow. They complement [ADRs](../adr/README.md), which record single architectural decisions.
 
+**Staffing:** this repository has one maintainer. The process below is the intended bar, not a staffed review roster. A 5-day comment period is **not** currently enforced. Prefer a short ADR in the same change unless the change is truly cross-cutting.
+
 ## When to Write an RFC
 
 | Write an RFC | Write an ADR instead |

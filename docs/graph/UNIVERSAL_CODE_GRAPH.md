@@ -1,8 +1,10 @@
 # Universal Code Graph (UCG)
 ## Architecture Specification v0.1
 
-> **Status:** Design baseline — no implementation  
-> **Crate home:** `s4-graph` (contracts), future `s4-graph-engine` (implementation)  
+> **Status:** Target spec.
+> **Shipped:** in-memory semantic graph + filter query in `s4-graph` (used by `s4 graph` / `s4 query`). Distributed store, S4QL, and `s4-graph-engine` are **not** shipped.
+> **Product:** [Porting Workflow](../guides/PORTING_WORKFLOW.md)
+> **Crate home:** `s4-graph`
 > **Depends on:** [Canonical Data Model](../model/CANONICAL_MODEL.md)
 
 ---

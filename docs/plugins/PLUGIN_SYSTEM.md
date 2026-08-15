@@ -2,6 +2,7 @@
 ## Architecture Specification v0.1
 
 > **Status:** Target design. Shipped code is an **in-process registry of first-party frontends** (`s4 plugin list`), not a loader, sandbox, or third-party SDK.
+> **Shipped product:** [Porting Workflow](../guides/PORTING_WORKFLOW.md) — not this plugin bus.
 > **Contract crate:** `s4-plugin` (manifests + host trait)
 > **Shipped:** Java/Rust Tree-sitter frontends dispatched by language id in `s4-parser` (`extract_for_language`). WASM deferred: [ADR-016](../adr/0016-phase6-in-process-host-wasm-deferred.md).
 > **Principle:** Do not list a plugin in the host unless `graph build` / `reason` actually uses it.

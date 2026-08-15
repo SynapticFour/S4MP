@@ -63,11 +63,11 @@ make e2e-fixture
 Or by hand against your own copies of those trees (see README “Your own trees”). After `map suggest`:
 
 ```bash
-s4 map show --java mini-java --rust mini-rust --status diverged
-s4 map confirm --name add --java mini-java --rust mini-rust
-s4 diff --java mini-java --rust mini-rust
-s4 verify --java mini-java --rust mini-rust
-s4 certify --java mini-java --rust mini-rust
+cargo run -p s4-cli -- map show --java mini-java --rust mini-rust --status diverged
+cargo run -p s4-cli -- map confirm --name add --java mini-java --rust mini-rust
+cargo run -p s4-cli -- diff --java mini-java --rust mini-rust
+cargo run -p s4-cli -- verify --java mini-java --rust mini-rust
+cargo run -p s4-cli -- certify --java mini-java --rust mini-rust
 ```
 
 `map show` prints a 12-character id prefix. `map confirm --id` accepts that prefix when it is unique. `--name add` fails if two rows share that simple name — use `--id` or a qualified name (`Calculator.add`).
@@ -98,10 +98,18 @@ make graph
 # 3. Suggest Java↔Rust correspondences
 make map
 
-# 4. Render Markdown diff report
+# 4. Review rows, then confirm at least one pair
+make show
+cargo run -p s4-cli -- map confirm --name <symbol> --java gatk-java-hc --rust hc-rust
+
+# 5. Render Markdown diff report
 make diff
 # → .s4/reports/diff-report.md
 make open-report   # print report path
+
+# 6. Coverage / policy (Valid only after a confirm)
+make verify
+make certify
 ```
 
 | `GRAPH_FILTER` | `callable,calls,type,defines` | Node/edge kinds for `graph export` |
@@ -134,6 +142,8 @@ make clean-cache
 | `map` | `graph` | `s4 map suggest` |
 | `show` | `map` | `s4 map show` (short ids + pairings) |
 | `diff` | `map` | `s4 diff` → `.s4/reports/diff-report.md` |
+| `verify` | `map` | `s4 verify` (coverage thresholds) |
+| `certify` | `verify` | `s4 certify` (fails until ≥1 Ported row) |
 | `e2e-fixture` | — | Workspace tests for the mini-port review loop |
 | `open-report` | — | Print diff report path |
 | `install-hooks` | — | Enable local pre-commit checks (fmt, clippy, test) |
@@ -311,6 +321,22 @@ Key crates:
 | [`s4-analysis`](../../crates/s4-analysis/README.md) | Lowering, correspondence, diff report |
 | [`s4-storage`](../../crates/s4-storage/README.md) | `FileSystemStore` CAS |
 | [`s4-cli`](../../crates/s4-cli/README.md) | CLI orchestration |
+
+## Operator limits
+
+These are product rules, not bugs:
+
+| Limit | What happens |
+|-------|----------------|
+| `--name` matches two rows | Error listing both short ids — use `--id` or a qualified name (`Calculator.add`) |
+| Confirm extra (Rust-only) or missing (Java-only) | Error — those rows are not a pair |
+| Re-run `map suggest` after confirms | **Manual** `Ported` rows are kept; heuristic `Diverged` rows are replaced |
+| `make sources` twice with the same alias | Fails — register once |
+| `s4 certify` with zero Ported rows | Writes `Invalid`, exit non-zero |
+| `s4 certify` Valid | Policy over counters only — **not** “the port is semantically correct” |
+| One maintainer | No review roster; availability is best-effort |
+
+There is no crates.io release. Optional PATH install from this checkout: `cargo install --path crates/s4-cli --locked`.
 
 ## Limitations (v1)
 

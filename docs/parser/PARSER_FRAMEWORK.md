@@ -1,9 +1,10 @@
 # Language-Agnostic Parser Framework
 ## Tree-sitter Architecture Specification v0.1
 
-> **Status:** Design baseline — no implementation  
-> **Contract crate:** `s4-parser`  
-> **Future implementation crate:** `s4-parser-engine` (Tree-sitter host)  
+> **Status:** Target spec.
+> **Shipped:** in-process Java/Rust Tree-sitter in `s4-parser` (`extract_for_language`). WASM grammars, a separate `s4-parser-engine`, and third-party grammar plugins are **not** shipped.
+> **Product:** [Porting Workflow](../guides/PORTING_WORKFLOW.md)
+> **Contract crate:** `s4-parser`
 > **Depends on:** [Plugin System](../plugins/PLUGIN_SYSTEM.md), [Canonical Model](../model/CANONICAL_MODEL.md), [UCG](../graph/UNIVERSAL_CODE_GRAPH.md)
 
 ---

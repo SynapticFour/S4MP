@@ -9,6 +9,7 @@
 #   make sources RUST_LOCAL=../my-hc-port
 #   make diff
 #   make show
+#   make verify / make certify   # Valid only after map confirm
 
 JAVA_ALIAS ?= gatk-java-hc
 JAVA_GIT   ?= https://github.com/broadinstitute/gatk.git
@@ -17,7 +18,7 @@ RUST_ALIAS ?= hc-rust
 RUST_LOCAL ?= ../my-hc-port
 GRAPH_FILTER ?= callable,calls,type,defines
 
-.PHONY: sources graph-java graph-rust graph map show diff \
+.PHONY: sources graph-java graph-rust graph map show diff verify certify \
         graph-export graph-export-java graph-export-rust graph-export-svg \
         open-report install-hooks clean-cache e2e-fixture
 
@@ -61,7 +62,15 @@ show: map
 diff: map
 	cargo run -p s4-cli -- diff --java $(JAVA_ALIAS) --rust $(RUST_ALIAS)
 	@echo "Report: .s4/reports/diff-report.md"
-	@echo "Review rows: make show   then   s4 map confirm --name <symbol> --java $(JAVA_ALIAS) --rust $(RUST_ALIAS)"
+	@echo "Review rows: make show"
+	@echo "Then: cargo run -p s4-cli -- map confirm --name <symbol> --java $(JAVA_ALIAS) --rust $(RUST_ALIAS)"
+
+verify: map
+	cargo run -p s4-cli -- verify --java $(JAVA_ALIAS) --rust $(RUST_ALIAS)
+
+certify: verify
+	cargo run -p s4-cli -- certify --java $(JAVA_ALIAS) --rust $(RUST_ALIAS)
+	@echo "Valid only after ≥1 map confirm. Heuristic-only maps exit non-zero."
 
 open-report:
 	@echo .s4/reports/diff-report.md

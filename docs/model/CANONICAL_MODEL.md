@@ -1,7 +1,8 @@
 # S4MP Canonical Data Model
 ## Specification v0.1
 
-> **Status:** Design baseline — no implementation  
+> **Status:** Design baseline — not the shipped product.
+> **Shipped:** local `s4` CLI (heuristic Java↔Rust port maps). See [Porting Workflow](../guides/PORTING_WORKFLOW.md).
 > **Principle:** Language-agnostic semantics first; language mappings are projections, not truth.
 
 ---

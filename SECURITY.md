@@ -18,7 +18,7 @@ Email **security@synapticfour.com** with:
 - Steps to reproduce
 - Impact assessment if known
 
-We aim to acknowledge within **48 hours** and provide triage within **7 days**.
+That address is the published contact for this repository. Acknowledgement targets (**48 hours** / triage **7 days**) are best-effort with one maintainer.
 
 ## Scope
 

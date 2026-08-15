@@ -1,8 +1,10 @@
 # Verification Engine
 ## Architecture Specification v0.1
 
-> **Status:** Design baseline — no implementation  
-> **Contract crate:** `s4-verification`  
+> **Status:** Target spec.
+> **Shipped:** coverage/trace thresholds (`s4 verify`) and policy over that run (`s4 certify`, `min_ported:1`). Not semantic equivalence.
+> **Product:** [Porting Workflow](../guides/PORTING_WORKFLOW.md)
+> **Contract crate:** `s4-verification`
 > **Related:** [Requirements Graph](../requirements/REQUIREMENTS_GRAPH.md), [UCG](../graph/UNIVERSAL_CODE_GRAPH.md), [SKG](../knowledge/SOFTWARE_KNOWLEDGE_GRAPH.md), [Plugin System](../plugins/PLUGIN_SYSTEM.md), [Canonical Model](../model/CANONICAL_MODEL.md)
 
 ---

@@ -1,8 +1,10 @@
 # Requirements Graph
 ## Architecture Specification v0.1
 
-> **Status:** Design baseline — no implementation  
-> **Contract crate:** `s4-requirements`  
+> **Status:** Target spec.
+> **Shipped:** JSON requirements + name traces (`s4 require …`, satellite). Full requirements graph / SOW parser is **not** shipped.
+> **Product:** [Porting Workflow](../guides/PORTING_WORKFLOW.md)
+> **Contract crate:** `s4-requirements`
 > **Related:** [Canonical Model](../model/CANONICAL_MODEL.md), [Software Knowledge Graph](../knowledge/SOFTWARE_KNOWLEDGE_GRAPH.md), [UCG](../graph/UNIVERSAL_CODE_GRAPH.md)
 
 ---

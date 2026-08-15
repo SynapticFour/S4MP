@@ -1,6 +1,6 @@
 [package]
 name = "s4-cli"
-description = "Command-line interface for S4MP"
+description = "Heuristic Java↔Rust port-map CLI (not semantic equivalence)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

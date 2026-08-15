@@ -35,3 +35,4 @@ All notable changes to S4MP are documented here. The crate version remains `0.1.
 - `s4 map show` row table (short id, status, confidence, pairing, signatures).
 - USIR/graph `qualified` names; correspondence `source_signature` / `target_signature`.
 - E2E: confirm `--name add` then `s4 certify` Valid; extras cannot be confirmed.
+- Docs index (`docs/README.md`): product vs target specs. Operator limits in the porting workflow. Makefile `verify` / `certify`. Optional `cargo install --path crates/s4-cli`.

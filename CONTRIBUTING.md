@@ -6,8 +6,8 @@ This repository is maintained by **one person**. Pull requests are welcome; they
 
 1. Read [Engineering Standards](docs/engineering/ENGINEERING_STANDARDS.md).
 2. Read the README maturity banner — do not add commands that claim certification or semantic equivalence.
-3. For the Java→Rust pipeline, see [Porting Workflow](docs/guides/PORTING_WORKFLOW.md).
-4. New architectural choices: add an [ADR](docs/adr/README.md) in the same change.
+3. For the Java→Rust pipeline, see [Porting Workflow](docs/guides/PORTING_WORKFLOW.md). Specs under `docs/` (architecture, plugin system, canonical model) are a **target model**, not shipped features — see [docs/README.md](docs/README.md).
+4. New architectural choices: add an [ADR](docs/adr/README.md) in the same change. RFCs are optional notes; there is no 5-day review roster.
 
 ## Development Setup
 
