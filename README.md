@@ -1,5 +1,8 @@
 # S4MP — heuristic Java↔Rust port maps
 
+Freeze status (2026-09): [STATUS.md](STATUS.md).
+
+
 > **Development paused (2026-09).** Internal Java↔Rust heuristic port-map tooling.
 > Not a Synaptic Four product SKU. Not Ferrum. `s4 certify` is not semantic
 > equivalence and not certification of a port.
