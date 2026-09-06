@@ -1,18 +1,12 @@
-# S4MP — heuristic Java↔Rust port maps
-
-> Internal Java↔Rust heuristic port-map tooling.
-> Not a Synaptic Four product SKU. Not Ferrum. `s4 certify` is not semantic
-> equivalence and not certification of a port.
+# S4MP — Java↔Rust port maps
 
 A **local CLI** that parses Java and Rust with Tree-sitter, builds a name graph, and suggests correspondences by **token Jaccard** (optional signatures). Maturity: `heuristic-map-v2`.
 
-**This is not** a production knowledge platform, not semantic equivalence, not a loadable plugin runtime, and not certification of a port. `s4 certify` evaluates policy over verification counters; the default policy **rejects** heuristic-only maps (zero manually confirmed `Ported` rows).
-
-Roadmap leftovers (HTTP API, UI, planner, WASM sandbox, networked LLM) are **parked stubs or specs**, not shipped software.
+`s4 certify` evaluates policy over verification counters. Heuristic suggestions stay `Diverged` until you confirm rows as `Ported`; the default policy needs at least one confirmed row.
 
 ## Quick Start (intended loop)
 
-The product is a **reviewable port map**, not a certificate of semantic equivalence.
+The result is a **reviewable port map**. `s4 certify` records that you confirmed correspondences; it is not a claim of semantic equivalence.
 
 ```
 init → source add → graph build → map suggest → map show → map confirm → diff → verify → certify

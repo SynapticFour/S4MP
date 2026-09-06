@@ -7,7 +7,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  # Weekly schedule off. workflow_dispatch / push / PR still run. Do not bump Lab Kit to Ferrum main.
+  # Weekly schedule off; workflow_dispatch / push / PR still run.
   # schedule:
   #   - cron: "0 6 * * 1"
   workflow_dispatch:
