@@ -1,9 +1,6 @@
 # S4MP — heuristic Java↔Rust port maps
 
-Freeze status (2026-09): [STATUS.md](STATUS.md).
-
-
-> **Development paused (2026-09).** Internal Java↔Rust heuristic port-map tooling.
+> Internal Java↔Rust heuristic port-map tooling.
 > Not a Synaptic Four product SKU. Not Ferrum. `s4 certify` is not semantic
 > equivalence and not certification of a port.
 
@@ -12,8 +9,6 @@ A **local CLI** that parses Java and Rust with Tree-sitter, builds a name graph,
 **This is not** a production knowledge platform, not semantic equivalence, not a loadable plugin runtime, and not certification of a port. `s4 certify` evaluates policy over verification counters; the default policy **rejects** heuristic-only maps (zero manually confirmed `Ported` rows).
 
 Roadmap leftovers (HTTP API, UI, planner, WASM sandbox, networked LLM) are **parked stubs or specs**, not shipped software.
-
-**Maintainer:** one person (`Synaptic Four`). Treat availability as best-effort. There is no review roster.
 
 ## Quick Start (intended loop)
 
